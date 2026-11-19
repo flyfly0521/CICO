@@ -1,0 +1,382 @@
+{
+  "system": "kuzu",
+  "dialect": "kuzu",
+  "workload_queries_executed": false,
+  "small_graph_queries_executed": true,
+  "store": "private temporary Kuzu store",
+  "cases": [
+    {
+      "case": "constraint_retry_key_identities",
+      "query": "MATCH (a:PERSON)-[:ISLOCATEDIN]->(cityA:PLACE)-[:ISPARTOF]->(country:PLACE {name: $country}), (a)-[:KNOWS]-(b:PERSON) WHERE cityA.type = 'City' AND country.type = 'Country' AND a.id < b.id WITH DISTINCT country, a, b MATCH (b)-[:ISLOCATEDIN]->(cityB:PLACE)-[:ISPARTOF]->(country) WHERE cityB.type = 'City' WITH DISTINCT country, a, b RETURN a.id AS a, b.id AS b, country.id AS c",
+      "parameters": {
+        "country": "Chile"
+      },
+      "rewritten": true,
+      "reason": "rewritten",
+      "route": "declared_constraints:parts:1,2",
+      "indexes": [
+        "PERSON(countryName)"
+      ],
+      "premises": [
+        "at_least_one: (:City)-[:ISPARTOF]->",
+        "at_least_one: (:Person)-[:ISLOCATEDIN]->",
+        "at_most_one: (:City)-[:ISPARTOF]->",
+        "at_most_one: (:Person)-[:ISLOCATEDIN]->",
+        "endpoint_labels: (:City)-[:ISPARTOF]->(:Country)",
+        "endpoint_labels: (:Person)-[:ISLOCATEDIN]->(:City)",
+        "required_property: Country.name",
+        "unique_property: Country.name"
+      ],
+      "specialized": [],
+      "rules": [
+        "constraint_implied_labels"
+      ],
+      "output": "MATCH (a:PERSON)-[cico_r1:KNOWS]-(b:PERSON) WHERE ((a.countryName = $country) AND (a.id < b.id)) WITH DISTINCT a, b MATCH (country:PLACE) WHERE ((country.name = $country) AND (country.type = 'Country')) WITH DISTINCT country, a, b MATCH (b) WHERE ((b.countryName = country.name) AND (country.type = 'Country')) WITH DISTINCT country, a, b RETURN a.id AS a, b.id AS b, country.id AS c",
+      "detail": "",
+      "rows": 4,
+      "equal": true,
+      "result": [
+        [
+          1,
+          2,
+          1
+        ],
+        [
+          1,
+          4,
+          1
+        ],
+        [
+          1,
+          6,
+          1
+        ],
+        [
+          2,
+          6,
+          1
+        ]
+      ]
+    },
+    {
+      "case": "constraint_retry_implied_types_shortest",
+      "query": "MATCH (s:PERSON {id: $pid})-[path:KNOWS* SHORTEST 1..$maxd]-(e:PERSON) WHERE length(path) >= 2 MATCH (e)-[:ISLOCATEDIN]->(city:PLACE)-[:ISPARTOF]->(country:PLACE {name: $country}) WHERE city.type = 'City' AND country.type = 'Country' RETURN e.id AS e, length(path) AS d",
+      "parameters": {
+        "pid": 1,
+        "maxd": 3,
+        "country": "Argentina"
+      },
+      "rewritten": true,
+      "reason": "rewritten",
+      "route": "declared_constraints:initial",
+      "indexes": [
+        "PERSON(countryName)"
+      ],
+      "premises": [
+        "at_least_one: (:City)-[:ISPARTOF]->",
+        "at_least_one: (:Person)-[:ISLOCATEDIN]->",
+        "at_most_one: (:City)-[:ISPARTOF]->",
+        "at_most_one: (:Person)-[:ISLOCATEDIN]->",
+        "endpoint_labels: (:City)-[:ISPARTOF]->(:Country)",
+        "endpoint_labels: (:Person)-[:ISLOCATEDIN]->(:City)"
+      ],
+      "specialized": [
+        "maxd"
+      ],
+      "rules": [
+        "constraint_implied_labels"
+      ],
+      "output": "MATCH (s:PERSON)-[path:KNOWS* SHORTEST 1..3]-(e:PERSON) WHERE (((s.id = $pid) AND (length(path) >= 2)) AND (e.countryName = $country)) RETURN e.id AS e, length(path) AS d",
+      "detail": "valid only for the given values of $maxd",
+      "rows": 3,
+      "equal": true,
+      "result": [
+        [
+          3,
+          2
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          8,
+          3
+        ]
+      ]
+    },
+    {
+      "case": "edge_carriers_both_orientations",
+      "query": "MATCH (a:PERSON)-[:KNOWS]-(b:PERSON) WITH a, b, 0 AS score OPTIONAL MATCH (a)-[:LIKES]->(m:MSG)-[:HASCREATOR]->(b) WITH DISTINCT a, b, score + (CASE WHEN m IS NULL THEN 0 ELSE 10 END) AS score RETURN a.id AS a, b.id AS b, score",
+      "parameters": {},
+      "rewritten": true,
+      "reason": "rewritten",
+      "route": "parts:2",
+      "indexes": [
+        "KNOWS(likes_fwd)",
+        "KNOWS(likes_rev)"
+      ],
+      "premises": [],
+      "specialized": [],
+      "rules": [
+        "relationship_carrier_existence"
+      ],
+      "output": "MATCH (a:PERSON)-[:KNOWS]-(b:PERSON) WITH a, b, 0 AS score OPTIONAL MATCH (a)-[cico_k:KNOWS]->(b) OPTIONAL MATCH (b)-[cico_k_:KNOWS]->(a) WITH a, b, score, CASE WHEN cico_k IS NOT NULL THEN coalesce(cico_k.likes_fwd, 0) > 0 WHEN cico_k_ IS NOT NULL THEN coalesce(cico_k_.likes_rev, 0) > 0 ELSE EXISTS { MATCH (a)-[:LIKES]->(m:MSG)-[:HASCREATOR]->(b) } END AS cico_exists WITH DISTINCT a, b, score + (CASE WHEN (NOT cico_exists) THEN 0 ELSE 10 END) AS score RETURN a.id AS a, b.id AS b, score",
+      "detail": "part 1: no_index_selected",
+      "rows": 18,
+      "equal": true,
+      "result": [
+        [
+          1,
+          2,
+          10
+        ],
+        [
+          1,
+          4,
+          0
+        ],
+        [
+          1,
+          6,
+          0
+        ],
+        [
+          2,
+          1,
+          0
+        ],
+        [
+          2,
+          3,
+          10
+        ],
+        [
+          2,
+          6,
+          0
+        ],
+        [
+          3,
+          2,
+          10
+        ],
+        [
+          3,
+          5,
+          0
+        ],
+        [
+          3,
+          8,
+          0
+        ],
+        [
+          4,
+          1,
+          0
+        ],
+        [
+          4,
+          5,
+          10
+        ],
+        [
+          5,
+          3,
+          0
+        ],
+        [
+          5,
+          4,
+          10
+        ],
+        [
+          6,
+          1,
+          10
+        ],
+        [
+          6,
+          2,
+          0
+        ],
+        [
+          7,
+          8,
+          0
+        ],
+        [
+          8,
+          3,
+          0
+        ],
+        [
+          8,
+          7,
+          0
+        ]
+      ]
+    },
+    {
+      "case": "edge_carriers_null_anchor",
+      "query": "MATCH (a:PERSON) OPTIONAL MATCH (a)-[:KNOWS]->(b:PERSON) WITH a, b OPTIONAL MATCH (a)-[:LIKES]->(m:MSG)-[:HASCREATOR]->(b) WITH DISTINCT a, b, m IS NULL AS missing RETURN a.id AS a, b.id AS b, missing",
+      "parameters": {},
+      "rewritten": true,
+      "reason": "rewritten",
+      "route": "parts:2",
+      "indexes": [
+        "KNOWS(likes_fwd)",
+        "KNOWS(likes_rev)"
+      ],
+      "premises": [],
+      "specialized": [],
+      "rules": [
+        "relationship_carrier_existence"
+      ],
+      "output": "MATCH (a:PERSON) OPTIONAL MATCH (a)-[:KNOWS]->(b:PERSON) WITH a, b OPTIONAL MATCH (a)-[cico_k:KNOWS]->(b) OPTIONAL MATCH (b)-[cico_k_:KNOWS]->(a) WITH a, b, CASE WHEN cico_k IS NOT NULL THEN coalesce(cico_k.likes_fwd, 0) > 0 WHEN cico_k_ IS NOT NULL THEN coalesce(cico_k_.likes_rev, 0) > 0 ELSE EXISTS { MATCH (a)-[:LIKES]->(m:MSG)-[:HASCREATOR]->(b) } END AS cico_exists WITH DISTINCT a, b, (NOT cico_exists) AS missing RETURN a.id AS a, b.id AS b, missing",
+      "detail": "part 1: no_index_selected",
+      "rows": 11,
+      "equal": true,
+      "result": [
+        [
+          1,
+          2,
+          false
+        ],
+        [
+          1,
+          4,
+          true
+        ],
+        [
+          2,
+          1,
+          true
+        ],
+        [
+          2,
+          6,
+          true
+        ],
+        [
+          3,
+          2,
+          false
+        ],
+        [
+          4,
+          5,
+          false
+        ],
+        [
+          5,
+          3,
+          true
+        ],
+        [
+          6,
+          1,
+          false
+        ],
+        [
+          7,
+          8,
+          true
+        ],
+        [
+          8,
+          3,
+          true
+        ],
+        [
+          9,
+          null,
+          true
+        ]
+      ]
+    },
+    {
+      "case": "scalar_regions_count_subquery",
+      "query": "MATCH (p:PERSON) RETURN p.id AS p, COUNT { MATCH (m:MSG)-[:HASCREATOR]->(p) } AS c",
+      "parameters": {},
+      "rewritten": true,
+      "reason": "rewritten",
+      "route": "expressions",
+      "indexes": [
+        "PERSON(msgCount)"
+      ],
+      "premises": [],
+      "specialized": [],
+      "rules": [
+        "correlated_graph_count"
+      ],
+      "output": "MATCH (p:PERSON) RETURN p.id AS p, (CASE WHEN p IS NULL THEN 0 ELSE CASE WHEN (p.msgCount IS NULL) THEN 0 ELSE p.msgCount END END) AS c",
+      "detail": "",
+      "rows": 9,
+      "equal": true,
+      "result": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          5,
+          1
+        ],
+        [
+          6,
+          1
+        ],
+        [
+          7,
+          0
+        ],
+        [
+          8,
+          1
+        ],
+        [
+          9,
+          0
+        ]
+      ]
+    }
+  ],
+  "rules": {
+    "scalar_regions": "enabled",
+    "edge_carriers": "enabled",
+    "constraint_retry": "enabled",
+    "path_carriers": "semantics: needs relationship_uniqueness == 'isomorphism' (under homomorphism the ordinary QueryPart rewrite already applies)",
+    "distinct_partitions": "missing hooks: frontend.rels, frontend.rel_pairs"
+  },
+  "constraint_checks": {
+    "at_most_one: (:Person)-[:ISLOCATEDIN]->": 0,
+    "at_least_one: (:Person)-[:ISLOCATEDIN]->": 0,
+    "at_most_one: (:City)-[:ISPARTOF]->": 0,
+    "at_least_one: (:City)-[:ISPARTOF]->": 0,
+    "endpoint_labels: (:Person)-[:ISLOCATEDIN]->(:City)": 0,
+    "endpoint_labels: (:City)-[:ISPARTOF]->(:Country)": 0,
+    "unique_property: Country.name": 0,
+    "required_property: Country.name": 0
+  },
+  "indexes": [
+    "KNOWS(likes_fwd)",
+    "KNOWS(likes_rev)",
+    "PERSON(countryName)",
+    "PERSON(msgCount)"
+  ],
+  "failures": []
+}

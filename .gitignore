@@ -1,0 +1,12 @@
+# C++ build and downloaded dependency tarballs
+/build/
+/.deps/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Local runtime data (databases, registries, logs)
+/runtime/

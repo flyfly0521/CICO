@@ -1,0 +1,265 @@
+{
+  "system": "kuzu",
+  "entry": "IndexMiddleware.execute (FILL / DROP_INDEX)",
+  "workload_queries_executed": false,
+  "small_graph_queries_executed": true,
+  "store": "private temporary Kuzu store",
+  "checks": [
+    {
+      "name": "fill_builds_count_and_hidden_state",
+      "statement": "FILL PERSON(cached) FROM (MATCH (p:PERSON)-[:LIVES]->(c:CITY) RETURN p.id, count(c))",
+      "reason": "added:active",
+      "writes": [
+        "ALTER TABLE PERSON ADD IF NOT EXISTS cached INT64",
+        "ALTER TABLE PERSON ADD IF NOT EXISTS __neug_fill_state_n_rows_3adceb9da862d81f INT64 DEFAULT 0",
+        "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.cached = NULL",
+        "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.__neug_fill_state_n_rows_3adceb9da862d81f = 0",
+        "MATCH (p:PERSON)-[cico_r1:LIVES]->(c:CITY) WITH p, count(c) AS cico_v0, count(*) AS cico_v1 SET p.cached = cico_v0, p.__neug_fill_state_n_rows_3adceb9da862d81f = cico_v1"
+      ],
+      "physical": [
+        [
+          1,
+          2,
+          2
+        ],
+        [
+          2,
+          1,
+          1
+        ],
+        [
+          3,
+          null,
+          0
+        ]
+      ],
+      "query": "MATCH (p:PERSON)-[:LIVES]->(c:CITY) RETURN p.id AS personId, count(c) AS cnt ORDER BY personId",
+      "output": "MATCH (p:PERSON) WHERE (p.cached <> 0) RETURN p.id AS personId, sum(CASE WHEN (p.cached IS NULL) THEN 0 ELSE p.cached END) AS cnt ORDER BY personId",
+      "rows": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "equal": true
+    },
+    {
+      "name": "restart_no_rebuild",
+      "writes": [],
+      "query": "MATCH (p:PERSON)-[:LIVES]->(c:CITY) RETURN p.id AS personId, count(c) AS cnt ORDER BY personId",
+      "output": "MATCH (p:PERSON) WHERE (p.cached <> 0) RETURN p.id AS personId, sum(CASE WHEN (p.cached IS NULL) THEN 0 ELSE p.cached END) AS cnt ORDER BY personId",
+      "rows": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "equal": true
+    },
+    {
+      "name": "equivalent_fill_no_rebuild",
+      "statement": "FILL PERSON(cached) FROM (match\n  (p:PERSON)-[:LIVES]->(c:CITY) return\n  p.id, count(c))",
+      "reason": "unchanged:active",
+      "writes": [],
+      "query": "MATCH (p:PERSON)-[:LIVES]->(c:CITY) RETURN p.id AS personId, count(c) AS cnt ORDER BY personId",
+      "output": "MATCH (p:PERSON) WHERE (p.cached <> 0) RETURN p.id AS personId, sum(CASE WHEN (p.cached IS NULL) THEN 0 ELSE p.cached END) AS cnt ORDER BY personId",
+      "rows": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "equal": true
+    },
+    {
+      "name": "added_dependent_builds_only_itself",
+      "statement": "FILL PERSON(doubled) FROM (MATCH (p:PERSON) RETURN p.id, p.cached * 2)",
+      "reason": "added:active",
+      "writes": [
+        "ALTER TABLE PERSON ADD IF NOT EXISTS doubled INT64",
+        "ALTER TABLE PERSON ADD IF NOT EXISTS __neug_fill_state_n_rows_55e148f630729ba6 INT64 DEFAULT 0",
+        "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.doubled = NULL",
+        "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.__neug_fill_state_n_rows_55e148f630729ba6 = 0",
+        "MATCH (p:PERSON) WITH p, (p.cached * 2) AS cico_v0, 1 AS cico_v1 SET p.doubled = cico_v0, p.__neug_fill_state_n_rows_55e148f630729ba6 = cico_v1"
+      ],
+      "query": "MATCH (p:PERSON)-[:LIVES]->(c:CITY) RETURN p.id AS personId, count(c) AS cnt ORDER BY personId",
+      "output": "MATCH (p:PERSON) WHERE (p.cached <> 0) RETURN p.id AS personId, sum(CASE WHEN (p.cached IS NULL) THEN 0 ELSE p.cached END) AS cnt ORDER BY personId",
+      "rows": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "equal": true
+    },
+    {
+      "name": "replaced_definition_rebuilds_dependency_chain",
+      "statement": "FILL PERSON(cached) FROM (MATCH (p:PERSON)-[:LIVES]->(c:CITY) WHERE c.id >= 2 RETURN p.id, count(c))",
+      "reason": "changed:active",
+      "writes": [
+        "ALTER TABLE PERSON ADD IF NOT EXISTS cached INT64",
+        "ALTER TABLE PERSON ADD IF NOT EXISTS __neug_fill_state_n_rows_8f4a9a056c981fdd INT64 DEFAULT 0",
+        "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.cached = NULL",
+        "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.__neug_fill_state_n_rows_8f4a9a056c981fdd = 0",
+        "MATCH (p:PERSON)-[cico_r1:LIVES]->(c:CITY) WHERE (c.id >= 2) WITH p, count(c) AS cico_v0, count(*) AS cico_v1 SET p.cached = cico_v0, p.__neug_fill_state_n_rows_8f4a9a056c981fdd = cico_v1",
+        "ALTER TABLE PERSON ADD IF NOT EXISTS doubled INT64",
+        "ALTER TABLE PERSON ADD IF NOT EXISTS __neug_fill_state_n_rows_55e148f630729ba6 INT64 DEFAULT 0",
+        "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.doubled = NULL",
+        "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.__neug_fill_state_n_rows_55e148f630729ba6 = 0",
+        "MATCH (p:PERSON) WITH p, (p.cached * 2) AS cico_v0, 1 AS cico_v1 SET p.doubled = cico_v0, p.__neug_fill_state_n_rows_55e148f630729ba6 = cico_v1"
+      ],
+      "query": "MATCH (p:PERSON)-[:LIVES]->(c:CITY) WHERE c.id >= 2 RETURN p.id AS personId, count(c) AS cnt ORDER BY personId",
+      "output": "MATCH (p:PERSON) WHERE (p.cached <> 0) RETURN p.id AS personId, sum(CASE WHEN (p.cached IS NULL) THEN 0 ELSE p.cached END) AS cnt ORDER BY personId",
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "equal": true
+    },
+    {
+      "name": "derived_relationship_materializes",
+      "statement": "FILL CACHED_LIVES() FROM (MATCH (p:PERSON)-[:LIVES]->(c:CITY) RETURN DISTINCT p.id, c.id)",
+      "reason": "added:active",
+      "writes": [
+        "CREATE REL TABLE IF NOT EXISTS CACHED_LIVES(FROM PERSON TO CITY)",
+        "MATCH ()-[cico_e:CACHED_LIVES]->() WITH cico_e DELETE cico_e",
+        "MATCH (p:PERSON)-[cico_r1:LIVES]->(c:CITY) WITH DISTINCT p, c CREATE (p)-[:CACHED_LIVES]->(c)"
+      ],
+      "query": "MATCH (p:PERSON)-[:LIVES]->(c:CITY) RETURN DISTINCT p.id AS personId, c.id AS cityId",
+      "output": "MATCH (p:PERSON)-[CACHED_LIVES:CACHED_LIVES]->(c:CITY) RETURN DISTINCT p.id AS personId, c.id AS cityId",
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ]
+      ],
+      "equal": true
+    },
+    {
+      "name": "drop_with_dependents_refused",
+      "statement": "DROP_INDEX PERSON(cached)",
+      "reason": "failed:dependents",
+      "writes": []
+    },
+    {
+      "name": "drop_index_removes_the_entry",
+      "statement": "DROP_INDEX PERSON(doubled)",
+      "reason": "removed",
+      "writes": [],
+      "registry": [
+        "PERSON(cached)",
+        "CACHED_LIVES()"
+      ]
+    },
+    {
+      "name": "stale_physical_carrier_refused_before_writes",
+      "statement": "FILL PERSON(doubled) FROM (MATCH (p:PERSON) RETURN p.id, p.cached * 2.0)",
+      "reason": "failed:validate",
+      "writes": [],
+      "query": "MATCH (p:PERSON)-[:LIVES]->(c:CITY) WHERE c.id >= 2 RETURN p.id AS personId, count(c) AS cnt ORDER BY personId",
+      "output": "MATCH (p:PERSON) WHERE (p.cached <> 0) RETURN p.id AS personId, sum(CASE WHEN (p.cached IS NULL) THEN 0 ELSE p.cached END) AS cnt ORDER BY personId",
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "equal": true
+    },
+    {
+      "name": "validation_rolled_back",
+      "person_columns": [
+        "id",
+        "cached",
+        "__neug_fill_state_n_rows_3adceb9da862d81f",
+        "doubled",
+        "__neug_fill_state_n_rows_55e148f630729ba6",
+        "__neug_fill_state_n_rows_8f4a9a056c981fdd"
+      ]
+    }
+  ],
+  "target": {
+    "device": 66306,
+    "inode": 18014155,
+    "path": "/tmp/cico-kuzu-registry-t3h4g3u8/db",
+    "system": "kuzu"
+  },
+  "registry": {
+    "version": 1,
+    "base_schema": "43171f4abf2980e064b4c4080379ac37fb28aa4f71285f3971382814d30d3b91",
+    "indexes": [
+      {
+        "id": "PERSON(cached)",
+        "fill": "FILL PERSON(cached) FROM (MATCH (p:PERSON)-[cico_r1:LIVES]->(c:CITY) WHERE (c.id >= 2) RETURN p.id AS cico_fill_0, count(c) AS cico_fill_1)",
+        "carrier": [
+          "ALTER TABLE PERSON ADD cached INT64"
+        ],
+        "depends_on": [],
+        "submitted": "FILL PERSON(cached) FROM (MATCH (p:PERSON)-[:LIVES]->(c:CITY) WHERE c.id >= 2 RETURN p.id, count(c))",
+        "updated": "2026-11-18T08:48:26+00:00"
+      },
+      {
+        "id": "CACHED_LIVES()",
+        "fill": "FILL CACHED_LIVES() FROM (MATCH (p:PERSON)-[cico_r1:LIVES]->(c:CITY) RETURN DISTINCT p.id AS cico_fill_0, c.id AS cico_fill_1)",
+        "carrier": [
+          "CREATE REL TABLE CACHED_LIVES(FROM PERSON TO CITY)"
+        ],
+        "depends_on": [],
+        "submitted": "FILL CACHED_LIVES() FROM (MATCH (p:PERSON)-[:LIVES]->(c:CITY) RETURN DISTINCT p.id, c.id)",
+        "updated": "2026-11-18T08:48:27+00:00"
+      }
+    ]
+  },
+  "state": {
+    "version": 1,
+    "target": "{\"device\": 66306, \"inode\": 18014155, \"path\": \"/tmp/cico-kuzu-registry-t3h4g3u8/db\", \"system\": \"kuzu\"}",
+    "indexes": {
+      "PERSON(cached)": {
+        "fingerprint": "5f056a99ff672dd927a0d6e6c25f9ce56b5c05f55464937e3cc62053f5409f5f",
+        "status": "ready",
+        "dependencies": [],
+        "built_at": "2026-11-18T08:48:26+00:00"
+      },
+      "CACHED_LIVES()": {
+        "fingerprint": "19023115720746e5ee3018491238c817acb85c9179d881f5cc7616bfe40b80a9",
+        "status": "ready",
+        "dependencies": [],
+        "built_at": "2026-11-18T08:48:27+00:00"
+      }
+    }
+  }
+}

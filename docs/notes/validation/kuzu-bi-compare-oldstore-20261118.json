@@ -1,0 +1,2353 @@
+{
+ "system": "kuzu",
+ "docs_commit": "08f1a2659ea2304b7940fd15db3c23382bf37eb7",
+ "middleware_commit": "89f0263cc7a1fd9c396d2c4953747a013556a7f9",
+ "store": "/mnt/sdb1/feiyang/cico_work/kuzu/bi-baseline",
+ "store_copy": "/tmp/cico_kuzu_bi/kuzu-bi",
+ "target": {
+  "device": 66306,
+  "inode": 18009049,
+  "path": "/tmp/cico_kuzu_bi/kuzu-bi",
+  "system": "kuzu"
+ },
+ "schema": "/mnt/sdb1/feiyang/kuzu/middleware/schemas/ldbc-bi.yaml",
+ "index_input": "NeuG/queries/index/ldbc-bi",
+ "queries": "Kuzu/queries/baseline/ldbc-bi",
+ "query_edits": "/mnt/sdb1/feiyang/kuzu/implementation/middleware/query_edits",
+ "sample": 0,
+ "registration_explain_only": true,
+ "workload_queries_executed": true,
+ "registration": [
+  {
+   "case": "bi10",
+   "file": "NeuG/queries/index/ldbc-bi/bi10/index.cypher",
+   "sha256": "5b7be733fec8e9fc4878bbc4bb507012f3087e73570d3ab140dffb13c9a3b2b6",
+   "status": "planned",
+   "indexes": [
+    "PERSON(countryName)"
+   ],
+   "dependencies": {
+    "PERSON(countryName)": []
+   },
+   "fingerprints": {
+    "PERSON(countryName)": "73ebbb0484325d10265e84a539252b8417bba72db596b7249c9712b051b26587"
+   },
+   "plans": [
+    {
+     "index_id": "PERSON(countryName)",
+     "fill": "FILL PERSON(countryName) FROM (MATCH (cico_n1:PLACE)-[cico_r2:ISPARTOF]->(country:PLACE), (person:PERSON)-[cico_r3:ISLOCATEDIN]->(cico_n1) RETURN person.id AS cico_fill_0, country.name AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE PERSON ADD IF NOT EXISTS countryName STRING DEFAULT ''",
+      "ALTER TABLE PERSON ADD IF NOT EXISTS __neug_fill_state_n_rows_580c8732ae54e1b8 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.countryName = ''",
+      "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.__neug_fill_state_n_rows_580c8732ae54e1b8 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (person:PERSON)-[cico_r3:ISLOCATEDIN]->(cico_n1:PLACE), (cico_n1)-[cico_r2:ISPARTOF]->(country:PLACE) WITH person, country.name AS cico_v0, 1 AS cico_v1 SET person.countryName = cico_v0, person.__neug_fill_state_n_rows_580c8732ae54e1b8 = cico_v1"
+     ]
+    }
+   ],
+   "statements": 5,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi11",
+   "file": "NeuG/queries/index/ldbc-bi/bi11/index.cypher",
+   "sha256": "5b7be733fec8e9fc4878bbc4bb507012f3087e73570d3ab140dffb13c9a3b2b6",
+   "status": "planned",
+   "indexes": [
+    "PERSON(countryName)"
+   ],
+   "dependencies": {
+    "PERSON(countryName)": []
+   },
+   "fingerprints": {
+    "PERSON(countryName)": "73ebbb0484325d10265e84a539252b8417bba72db596b7249c9712b051b26587"
+   },
+   "plans": [
+    {
+     "index_id": "PERSON(countryName)",
+     "fill": "FILL PERSON(countryName) FROM (MATCH (cico_n1:PLACE)-[cico_r2:ISPARTOF]->(country:PLACE), (person:PERSON)-[cico_r3:ISLOCATEDIN]->(cico_n1) RETURN person.id AS cico_fill_0, country.name AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE PERSON ADD IF NOT EXISTS countryName STRING DEFAULT ''",
+      "ALTER TABLE PERSON ADD IF NOT EXISTS __neug_fill_state_n_rows_580c8732ae54e1b8 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.countryName = ''",
+      "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.__neug_fill_state_n_rows_580c8732ae54e1b8 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (person:PERSON)-[cico_r3:ISLOCATEDIN]->(cico_n1:PLACE), (cico_n1)-[cico_r2:ISPARTOF]->(country:PLACE) WITH person, country.name AS cico_v0, 1 AS cico_v1 SET person.countryName = cico_v0, person.__neug_fill_state_n_rows_580c8732ae54e1b8 = cico_v1"
+     ]
+    }
+   ],
+   "statements": 5,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi13",
+   "file": "NeuG/queries/index/ldbc-bi/bi13/index.cypher",
+   "sha256": "980d05cbcd9216b5579c016ad24779b68a2e6c22c00dab06c1e6d0f1493d92e3",
+   "status": "schema_only",
+   "indexes": [],
+   "dependencies": {},
+   "fingerprints": {},
+   "plans": [],
+   "statements": 0
+  },
+  {
+   "case": "bi14",
+   "file": "NeuG/queries/index/ldbc-bi/bi14/index.cypher",
+   "sha256": "6a29a7eae23c626d83bb4fdaff621432d23cd610ae5569a0a456fd6fda7aa996",
+   "status": "planned",
+   "indexes": [
+    "KNOWS(bi14_case1_fwd)",
+    "KNOWS(bi14_case1_rev)",
+    "KNOWS(bi14_case2_fwd)",
+    "KNOWS(bi14_case2_rev)",
+    "KNOWS(bi14_case3_fwd)",
+    "KNOWS(bi14_case3_rev)",
+    "KNOWS(bi14_case4_fwd)",
+    "KNOWS(bi14_case4_rev)"
+   ],
+   "dependencies": {
+    "KNOWS(bi14_case1_fwd)": [],
+    "KNOWS(bi14_case1_rev)": [],
+    "KNOWS(bi14_case2_fwd)": [],
+    "KNOWS(bi14_case2_rev)": [],
+    "KNOWS(bi14_case3_fwd)": [],
+    "KNOWS(bi14_case3_rev)": [],
+    "KNOWS(bi14_case4_fwd)": [],
+    "KNOWS(bi14_case4_rev)": []
+   },
+   "fingerprints": {
+    "KNOWS(bi14_case1_fwd)": "0e01b80bf98b8d1ce8a0690a0645d7a02bab1b5e0aa7a86783e562428b5d065a",
+    "KNOWS(bi14_case1_rev)": "922745ae36825eafd36215e23122b8ee73b0776488210f231f16ebb6fe314beb",
+    "KNOWS(bi14_case2_fwd)": "689386f7db625250b0404cbcc2900b4b264b73c6bffb01651ba38f1da8748904",
+    "KNOWS(bi14_case2_rev)": "33c48109d2b191e2e9ad173c5602a23c7345155c5c905d87f2f6b059a2419459",
+    "KNOWS(bi14_case3_fwd)": "df369349814f52ec95246a8a8d338b1e8082a90f627ae665aeb2edf5153458e1",
+    "KNOWS(bi14_case3_rev)": "f67fd02baf1c6bde83d20e6bf603e858ffc28b2e92ba87d86cb6a861d3eb8329",
+    "KNOWS(bi14_case4_fwd)": "259636f2e94fb783d18c4987668607615f076e06e2797f80da1eb85f0aefbb58",
+    "KNOWS(bi14_case4_rev)": "0dd2d2e2e1ee41eb53441360a29ac0ca02188f082764df3e414fe255e8dabea0"
+   },
+   "plans": [
+    {
+     "index_id": "KNOWS(bi14_case1_fwd)",
+     "fill": "FILL KNOWS(bi14_case1_fwd) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (c:COMMENT)-[cico_r2:HASCREATOR]->(pA), (c)-[cico_r3:REPLYOF]->(cico_n1:COMMENT:POST), (cico_n1)-[cico_r4:HASCREATOR]->(pB) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(c) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case1_fwd INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_2277ae2022ba4477 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case1_fwd = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_2277ae2022ba4477 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (cico_n1:COMMENT:POST)-[cico_r4:HASCREATOR]->(pB), (c:COMMENT)-[cico_r3:REPLYOF]->(cico_n1), (c)-[cico_r2:HASCREATOR]->(pA) WITH pA, pB, count(c) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case1_fwd = cico_v0, cico_e.__neug_fill_state_n_rows_2277ae2022ba4477 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case1_rev)",
+     "fill": "FILL KNOWS(bi14_case1_rev) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (c:COMMENT)-[cico_r2:HASCREATOR]->(pB), (c)-[cico_r3:REPLYOF]->(cico_n1:COMMENT:POST), (cico_n1)-[cico_r4:HASCREATOR]->(pA) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(c) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case1_rev INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_ceb40ddb77659bc9 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case1_rev = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_ceb40ddb77659bc9 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (cico_n1:COMMENT:POST)-[cico_r4:HASCREATOR]->(pA), (c:COMMENT)-[cico_r3:REPLYOF]->(cico_n1), (c)-[cico_r2:HASCREATOR]->(pB) WITH pA, pB, count(c) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case1_rev = cico_v0, cico_e.__neug_fill_state_n_rows_ceb40ddb77659bc9 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case2_fwd)",
+     "fill": "FILL KNOWS(bi14_case2_fwd) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (m:COMMENT:POST)-[cico_r2:HASCREATOR]->(pA), (cico_n1:COMMENT)-[cico_r3:REPLYOF]->(m), (cico_n1)-[cico_r4:HASCREATOR]->(pB) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(m) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case2_fwd INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_671e537ffaa8ed00 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case2_fwd = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_671e537ffaa8ed00 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (cico_n1:COMMENT)-[cico_r4:HASCREATOR]->(pB), (cico_n1)-[cico_r3:REPLYOF]->(m:COMMENT:POST), (m)-[cico_r2:HASCREATOR]->(pA) WITH pA, pB, count(m) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case2_fwd = cico_v0, cico_e.__neug_fill_state_n_rows_671e537ffaa8ed00 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case2_rev)",
+     "fill": "FILL KNOWS(bi14_case2_rev) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (m:COMMENT:POST)-[cico_r2:HASCREATOR]->(pB), (cico_n1:COMMENT)-[cico_r3:REPLYOF]->(m), (cico_n1)-[cico_r4:HASCREATOR]->(pA) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(m) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case2_rev INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_34b8412c41bb8ec7 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case2_rev = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_34b8412c41bb8ec7 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (cico_n1:COMMENT)-[cico_r4:HASCREATOR]->(pA), (cico_n1)-[cico_r3:REPLYOF]->(m:COMMENT:POST), (m)-[cico_r2:HASCREATOR]->(pB) WITH pA, pB, count(m) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case2_rev = cico_v0, cico_e.__neug_fill_state_n_rows_34b8412c41bb8ec7 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case3_fwd)",
+     "fill": "FILL KNOWS(bi14_case3_fwd) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (pA)-[cico_r1:LIKES]->(m:COMMENT:POST), (m)-[cico_r2:HASCREATOR]->(pB) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(m) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case3_fwd INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_5672c6a0f4f140dc INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case3_fwd = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_5672c6a0f4f140dc = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (m:COMMENT:POST)-[cico_r2:HASCREATOR]->(pB), (pA)-[cico_r1:LIKES]->(m) WITH pA, pB, count(m) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case3_fwd = cico_v0, cico_e.__neug_fill_state_n_rows_5672c6a0f4f140dc = cico_v1"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case3_rev)",
+     "fill": "FILL KNOWS(bi14_case3_rev) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (pB)-[cico_r1:LIKES]->(m:COMMENT:POST), (m)-[cico_r2:HASCREATOR]->(pA) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(m) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case3_rev INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_96c6f07f60f97e59 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case3_rev = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_96c6f07f60f97e59 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (m:COMMENT:POST)-[cico_r2:HASCREATOR]->(pA), (pB)-[cico_r1:LIKES]->(m) WITH pA, pB, count(m) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case3_rev = cico_v0, cico_e.__neug_fill_state_n_rows_96c6f07f60f97e59 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case4_fwd)",
+     "fill": "FILL KNOWS(bi14_case4_fwd) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (m:COMMENT:POST)-[cico_r1:HASCREATOR]->(pA), (pB)-[cico_r2:LIKES]->(m) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(m) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case4_fwd INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_4a5904f32d6f1446 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case4_fwd = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_4a5904f32d6f1446 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (pB)-[cico_r2:LIKES]->(m:COMMENT:POST), (m)-[cico_r1:HASCREATOR]->(pA) WITH pA, pB, count(m) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case4_fwd = cico_v0, cico_e.__neug_fill_state_n_rows_4a5904f32d6f1446 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case4_rev)",
+     "fill": "FILL KNOWS(bi14_case4_rev) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (m:COMMENT:POST)-[cico_r1:HASCREATOR]->(pB), (pA)-[cico_r2:LIKES]->(m) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(m) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case4_rev INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_923a45493400673c INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case4_rev = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_923a45493400673c = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (pA)-[cico_r2:LIKES]->(m:COMMENT:POST), (m)-[cico_r1:HASCREATOR]->(pB) WITH pA, pB, count(m) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case4_rev = cico_v0, cico_e.__neug_fill_state_n_rows_923a45493400673c = cico_v1"
+     ]
+    }
+   ],
+   "statements": 40,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi15",
+   "file": "NeuG/queries/index/ldbc-bi/bi15/index.cypher",
+   "sha256": "ba0033e71b384d75d11293578cb21465ad650de2fa15b58039f8a71539879342",
+   "status": "planned",
+   "indexes": [
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+    "KNOWS(bi14_case1_rev,bi15_post_rev)",
+    "KNOWS(bi15_weight)"
+   ],
+   "dependencies": {
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)": [],
+    "KNOWS(bi14_case1_rev,bi15_post_rev)": [],
+    "KNOWS(bi15_weight)": [
+     "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+     "KNOWS(bi14_case1_rev,bi15_post_rev)"
+    ]
+   },
+   "fingerprints": {
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)": "4472985db84a6dfb26b9d85269b850c3d57fe65295f3764f9c4275be843563e3",
+    "KNOWS(bi14_case1_rev,bi15_post_rev)": "ee03bb9f20e8b8650fa5dce5ba0a54b9c1049c9ab4de3d88d9564b52fccec63c",
+    "KNOWS(bi15_weight)": "85cac7e76c061d7ea56f3cec2df1a41062eb044d25bf0f75b3c0ff2e60aa71e9"
+   },
+   "plans": [
+    {
+     "index_id": "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+     "fill": "FILL KNOWS(bi14_case1_fwd,bi15_post_fwd) FROM (MATCH (pA:PERSON)-[cico_r1:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (comment:COMMENT)-[cico_r2:HASCREATOR]->(pA), (comment)-[cico_r3:REPLYOF]->(target:COMMENT:POST), (target)-[cico_r4:HASCREATOR]->(pB) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(comment) AS cico_fill_2, sum(CASE WHEN ((label(target) = 'POST') = true) THEN 1 ELSE 0 END) AS cico_fill_3)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case1_fwd INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi15_post_fwd INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_1bc749c7c14a8f78 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case1_fwd = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi15_post_fwd = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_1bc749c7c14a8f78 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[cico_r1:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (target:COMMENT:POST)-[cico_r4:HASCREATOR]->(pB), (comment:COMMENT)-[cico_r3:REPLYOF]->(target), (comment)-[cico_r2:HASCREATOR]->(pA) WITH pA, pB, count(comment) AS cico_v0, sum(CASE WHEN ((label(target) = 'POST') = true) THEN 1 ELSE 0 END) AS cico_v1, 1 AS cico_v2 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case1_fwd = cico_v0, cico_e.bi15_post_fwd = cico_v1, cico_e.__neug_fill_state_n_rows_1bc749c7c14a8f78 = cico_v2"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case1_rev,bi15_post_rev)",
+     "fill": "FILL KNOWS(bi14_case1_rev,bi15_post_rev) FROM (MATCH (pA:PERSON)-[cico_r1:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (comment:COMMENT)-[cico_r2:HASCREATOR]->(pB), (comment)-[cico_r3:REPLYOF]->(target:COMMENT:POST), (target)-[cico_r4:HASCREATOR]->(pA) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(comment) AS cico_fill_2, sum(CASE WHEN ((label(target) = 'POST') = true) THEN 1 ELSE 0 END) AS cico_fill_3)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case1_rev INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi15_post_rev INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_5a2d4dab8f954381 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case1_rev = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi15_post_rev = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_5a2d4dab8f954381 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[cico_r1:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (target:COMMENT:POST)-[cico_r4:HASCREATOR]->(pA), (comment:COMMENT)-[cico_r3:REPLYOF]->(target), (comment)-[cico_r2:HASCREATOR]->(pB) WITH pA, pB, count(comment) AS cico_v0, sum(CASE WHEN ((label(target) = 'POST') = true) THEN 1 ELSE 0 END) AS cico_v1, 1 AS cico_v2 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case1_rev = cico_v0, cico_e.bi15_post_rev = cico_v1, cico_e.__neug_fill_state_n_rows_5a2d4dab8f954381 = cico_v2"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi15_weight)",
+     "fill": "FILL KNOWS(bi15_weight) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB, knows, (knows.bi14_case1_fwd + knows.bi14_case1_rev) AS replyCount, (knows.bi15_post_fwd + knows.bi15_post_rev) AS postReplyCount RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, (1.000000 / ((0.500000 * CAST((replyCount + postReplyCount) AS DOUBLE)) + 1.000000)) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi15_weight DOUBLE DEFAULT 1.0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_177ab64869936516 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi15_weight = 1.0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_177ab64869936516 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB, knows, (knows.bi14_case1_fwd + knows.bi14_case1_rev) AS replyCount, (knows.bi15_post_fwd + knows.bi15_post_rev) AS postReplyCount WITH pA, pB, (1.000000 / ((0.500000 * CAST((replyCount + postReplyCount) AS DOUBLE)) + 1.000000)) AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi15_weight = cico_v0, cico_e.__neug_fill_state_n_rows_177ab64869936516 = cico_v1"
+     ]
+    }
+   ],
+   "statements": 19,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi15w",
+   "file": "NeuG/queries/index/ldbc-bi/bi15w/index.cypher",
+   "sha256": "2bde037cc6cc0b76d91f8b5f84cdc899e81283270a0df062ccad459e35925a05",
+   "status": "unsupported",
+   "error": "ValueError: Overlapping FILL carriers: ('KNOWS', ('{}', '{}')) and KNOWS('{}', '{}')"
+  },
+  {
+   "case": "bi16",
+   "file": "NeuG/queries/index/ldbc-bi/bi16/index.cypher",
+   "sha256": "dadc1017d2fb02fac50aa7c3916e4b254c85de8435abd9c44aa41ca6b7b9d040",
+   "status": "schema_only",
+   "indexes": [],
+   "dependencies": {},
+   "fingerprints": {},
+   "plans": [],
+   "statements": 0
+  },
+  {
+   "case": "bi17",
+   "file": "NeuG/queries/index/ldbc-bi/bi17/index.cypher",
+   "sha256": "d59688e5a957623439c1827eb63592f7736dbbee16fb9f71d927e1500cee1eb9",
+   "status": "planned",
+   "indexes": [
+    "ROOT_POST()"
+   ],
+   "dependencies": {
+    "ROOT_POST()": []
+   },
+   "fingerprints": {
+    "ROOT_POST()": "50b50c6c9c990c86786a1dba769547a295682bf80a32e405a531fc3699753a7f"
+   },
+   "plans": [
+    {
+     "index_id": "ROOT_POST()",
+     "fill": "FILL ROOT_POST() FROM (MATCH (message:COMMENT:POST)-[cico_r1:REPLYOF*0..4294967295]->(post:POST) RETURN DISTINCT message.id AS cico_fill_0, post.id AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "CREATE REL TABLE IF NOT EXISTS ROOT_POST(FROM COMMENT TO POST, FROM POST TO POST)"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:ROOT_POST]->() WITH cico_e DELETE cico_e"
+     ],
+     "fill_statements": [
+      "MATCH (message:COMMENT:POST)-[cico_r1:REPLYOF*0..]->(post:POST) WITH DISTINCT message, post WITH message, post WHERE label(message) = 'COMMENT' MATCH (cico_e0:COMMENT {id: message.id}) CREATE (cico_e0)-[:ROOT_POST]->(post)",
+      "MATCH (message:COMMENT:POST)-[cico_r1:REPLYOF*0..]->(post:POST) WITH DISTINCT message, post WITH message, post WHERE label(message) = 'POST' MATCH (cico_e0:POST {id: message.id}) CREATE (cico_e0)-[:ROOT_POST]->(post)"
+     ]
+    }
+   ],
+   "statements": 4,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi19a",
+   "file": "NeuG/queries/index/ldbc-bi/bi19a/index.cypher",
+   "sha256": "d7ebadb8f44a0b1094015e91b29b2c49622b32e20b5409b638e1dc2c91a7a4ef",
+   "status": "planned",
+   "indexes": [
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+    "KNOWS(bi14_case1_rev,bi15_post_rev)",
+    "KNOWS(weight_bi19)"
+   ],
+   "dependencies": {
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)": [],
+    "KNOWS(bi14_case1_rev,bi15_post_rev)": [],
+    "KNOWS(weight_bi19)": [
+     "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+     "KNOWS(bi14_case1_rev,bi15_post_rev)"
+    ]
+   },
+   "fingerprints": {
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)": "4472985db84a6dfb26b9d85269b850c3d57fe65295f3764f9c4275be843563e3",
+    "KNOWS(bi14_case1_rev,bi15_post_rev)": "ee03bb9f20e8b8650fa5dce5ba0a54b9c1049c9ab4de3d88d9564b52fccec63c",
+    "KNOWS(weight_bi19)": "b86132a4ccc343ed629039f038534e27efec33aa37b13c4f465f5b60bbb99bc2"
+   },
+   "plans": [
+    {
+     "index_id": "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+     "fill": "FILL KNOWS(bi14_case1_fwd,bi15_post_fwd) FROM (MATCH (pA:PERSON)-[cico_r1:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (comment:COMMENT)-[cico_r2:HASCREATOR]->(pA), (comment)-[cico_r3:REPLYOF]->(target:COMMENT:POST), (target)-[cico_r4:HASCREATOR]->(pB) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(comment) AS cico_fill_2, sum(CASE WHEN ((label(target) = 'POST') = true) THEN 1 ELSE 0 END) AS cico_fill_3)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case1_fwd INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi15_post_fwd INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_1bc749c7c14a8f78 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case1_fwd = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi15_post_fwd = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_1bc749c7c14a8f78 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[cico_r1:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (target:COMMENT:POST)-[cico_r4:HASCREATOR]->(pB), (comment:COMMENT)-[cico_r3:REPLYOF]->(target), (comment)-[cico_r2:HASCREATOR]->(pA) WITH pA, pB, count(comment) AS cico_v0, sum(CASE WHEN ((label(target) = 'POST') = true) THEN 1 ELSE 0 END) AS cico_v1, 1 AS cico_v2 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case1_fwd = cico_v0, cico_e.bi15_post_fwd = cico_v1, cico_e.__neug_fill_state_n_rows_1bc749c7c14a8f78 = cico_v2"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi14_case1_rev,bi15_post_rev)",
+     "fill": "FILL KNOWS(bi14_case1_rev,bi15_post_rev) FROM (MATCH (pA:PERSON)-[cico_r1:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (comment:COMMENT)-[cico_r2:HASCREATOR]->(pB), (comment)-[cico_r3:REPLYOF]->(target:COMMENT:POST), (target)-[cico_r4:HASCREATOR]->(pA) RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, count(comment) AS cico_fill_2, sum(CASE WHEN ((label(target) = 'POST') = true) THEN 1 ELSE 0 END) AS cico_fill_3)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi14_case1_rev INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi15_post_rev INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_5a2d4dab8f954381 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi14_case1_rev = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi15_post_rev = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_5a2d4dab8f954381 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[cico_r1:KNOWS]->(pB:PERSON) WITH pA, pB MATCH (target:COMMENT:POST)-[cico_r4:HASCREATOR]->(pA), (comment:COMMENT)-[cico_r3:REPLYOF]->(target), (comment)-[cico_r2:HASCREATOR]->(pB) WITH pA, pB, count(comment) AS cico_v0, sum(CASE WHEN ((label(target) = 'POST') = true) THEN 1 ELSE 0 END) AS cico_v1, 1 AS cico_v2 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.bi14_case1_rev = cico_v0, cico_e.bi15_post_rev = cico_v1, cico_e.__neug_fill_state_n_rows_5a2d4dab8f954381 = cico_v2"
+     ]
+    },
+    {
+     "index_id": "KNOWS(weight_bi19)",
+     "fill": "FILL KNOWS(weight_bi19) FROM (MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB, knows, (knows.bi14_case1_fwd + knows.bi14_case1_rev) AS replyCount RETURN pA.id AS cico_fill_0, pB.id AS cico_fill_1, CASE WHEN ((replyCount = 0) = true) THEN 10000000000000.000000 ELSE CASE WHEN ((ROUND((40.000000 - SQRT(CAST(replyCount AS DOUBLE))), 0) > 1.000000) = true) THEN ROUND((40.000000 - SQRT(CAST(replyCount AS DOUBLE))), 0) ELSE 1.000000 END END AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS weight_bi19 DOUBLE DEFAULT 10000000000000.0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_5e6264ae13b1b344 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.weight_bi19 = 10000000000000.0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_5e6264ae13b1b344 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) WITH pA, pB, knows, (knows.bi14_case1_fwd + knows.bi14_case1_rev) AS replyCount WITH pA, pB, CASE WHEN ((replyCount = 0) = true) THEN 10000000000000.000000 ELSE CASE WHEN ((ROUND((40.000000 - SQRT(CAST(replyCount AS DOUBLE))), 0) > 1.000000) = true) THEN ROUND((40.000000 - SQRT(CAST(replyCount AS DOUBLE))), 0) ELSE 1.000000 END END AS cico_v0, 1 AS cico_v1 MATCH (pA)-[cico_e:KNOWS]->(pB) SET cico_e.weight_bi19 = cico_v0, cico_e.__neug_fill_state_n_rows_5e6264ae13b1b344 = cico_v1"
+     ]
+    }
+   ],
+   "statements": 19,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi2",
+   "file": "NeuG/queries/index/ldbc-bi/bi2/index.cypher",
+   "sha256": "53d5e45f6d5bf4eef948c8d085a213d8f998a245173c5c39edf588554833df79",
+   "status": "schema_only",
+   "indexes": [],
+   "dependencies": {},
+   "fingerprints": {},
+   "plans": [],
+   "statements": 0
+  },
+  {
+   "case": "bi20",
+   "file": "NeuG/queries/index/ldbc-bi/bi20/index.cypher",
+   "sha256": "9d0e8b9071e9f123d4972c2d59c2fb5b147eaca367b8bc73b4c92e21a7adfb93",
+   "status": "planned",
+   "indexes": [
+    "KNOWS(bi20_direct)",
+    "KNOWS(bi20_weight)"
+   ],
+   "dependencies": {
+    "KNOWS(bi20_direct)": [],
+    "KNOWS(bi20_weight)": [
+     "KNOWS(bi20_direct)"
+    ]
+   },
+   "fingerprints": {
+    "KNOWS(bi20_direct)": "3a5da9551fef4215c2ea90bd7500e7c488cb4cb9ccc8b72cebb694549795fba9",
+    "KNOWS(bi20_weight)": "8729cf15defe017397e523efbca96c0fc04ebf9126dd6c541d5c0ee86fa20e89"
+   },
+   "plans": [
+    {
+     "index_id": "KNOWS(bi20_direct)",
+     "fill": "FILL KNOWS(bi20_direct) FROM (MATCH (personA:PERSON)-[saA:STUDYAT]->(university:ORGANISATION), (personB:PERSON)-[saB:STUDYAT]->(university), (personA)-[cico_r1:KNOWS]->(personB) RETURN personA.id AS cico_fill_0, personB.id AS cico_fill_1, (CAST(min(CASE WHEN ((saA.classYear >= saB.classYear) = true) THEN (saA.classYear - saB.classYear) ELSE (saB.classYear - saA.classYear) END) AS INT64) + 1) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi20_direct INT64 DEFAULT 0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_c265d228e89ddc28 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi20_direct = 0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_c265d228e89ddc28 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (personA:PERSON)-[cico_r1:KNOWS]->(personB:PERSON), (personB)-[saB:STUDYAT]->(university:ORGANISATION), (personA)-[saA:STUDYAT]->(university) WITH personA, personB, (CAST(min(CASE WHEN ((saA.classYear >= saB.classYear) = true) THEN (saA.classYear - saB.classYear) ELSE (saB.classYear - saA.classYear) END) AS INT64) + 1) AS cico_v0, 1 AS cico_v1 MATCH (personA)-[cico_e:KNOWS]->(personB) SET cico_e.bi20_direct = cico_v0, cico_e.__neug_fill_state_n_rows_c265d228e89ddc28 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "KNOWS(bi20_weight)",
+     "fill": "FILL KNOWS(bi20_weight) FROM (MATCH (personA:PERSON)-[knows:KNOWS]->(personB:PERSON) RETURN personA.id AS cico_fill_0, personB.id AS cico_fill_1, CASE WHEN ((knows.bi20_direct = 0) = true) THEN 10000000000000.000000 ELSE CAST(knows.bi20_direct AS DOUBLE) END AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS bi20_weight DOUBLE DEFAULT 10000000000000.0",
+      "ALTER TABLE KNOWS ADD IF NOT EXISTS __neug_fill_state_n_rows_e57bdbc92d6266e9 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.bi20_weight = 10000000000000.0",
+      "MATCH ()-[cico_e:KNOWS]->() WITH cico_e SET cico_e.__neug_fill_state_n_rows_e57bdbc92d6266e9 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (personA:PERSON)-[knows:KNOWS]->(personB:PERSON) WITH personA, personB, CASE WHEN ((knows.bi20_direct = 0) = true) THEN 10000000000000.000000 ELSE CAST(knows.bi20_direct AS DOUBLE) END AS cico_v0, 1 AS cico_v1 MATCH (personA)-[cico_e:KNOWS]->(personB) SET cico_e.bi20_weight = cico_v0, cico_e.__neug_fill_state_n_rows_e57bdbc92d6266e9 = cico_v1"
+     ]
+    }
+   ],
+   "statements": 10,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi3",
+   "file": "NeuG/queries/index/ldbc-bi/bi3/index.cypher",
+   "sha256": "65696e8c50162029c7e55dc5cab41b8bcaf1f1a102faac0364f817166daee99b",
+   "status": "planned",
+   "indexes": [
+    "PERSON(countryName)",
+    "ROOT_POST()"
+   ],
+   "dependencies": {
+    "PERSON(countryName)": [],
+    "ROOT_POST()": []
+   },
+   "fingerprints": {
+    "PERSON(countryName)": "73ebbb0484325d10265e84a539252b8417bba72db596b7249c9712b051b26587",
+    "ROOT_POST()": "2282b8e67cdd41e5adb5e02f7844de2936a11bf5cbc1a3f8e331fd00bdfdf7e2"
+   },
+   "plans": [
+    {
+     "index_id": "PERSON(countryName)",
+     "fill": "FILL PERSON(countryName) FROM (MATCH (cico_n1:PLACE)-[cico_r2:ISPARTOF]->(country:PLACE), (person:PERSON)-[cico_r3:ISLOCATEDIN]->(cico_n1) RETURN person.id AS cico_fill_0, country.name AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE PERSON ADD IF NOT EXISTS countryName STRING DEFAULT ''",
+      "ALTER TABLE PERSON ADD IF NOT EXISTS __neug_fill_state_n_rows_580c8732ae54e1b8 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.countryName = ''",
+      "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.__neug_fill_state_n_rows_580c8732ae54e1b8 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (person:PERSON)-[cico_r3:ISLOCATEDIN]->(cico_n1:PLACE), (cico_n1)-[cico_r2:ISPARTOF]->(country:PLACE) WITH person, country.name AS cico_v0, 1 AS cico_v1 SET person.countryName = cico_v0, person.__neug_fill_state_n_rows_580c8732ae54e1b8 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "ROOT_POST()",
+     "fill": "FILL ROOT_POST() FROM (MATCH (message:COMMENT:POST)-[e:REPLYOF*0..4294967295]->(post:POST) RETURN DISTINCT message.id AS cico_fill_0, post.id AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "CREATE REL TABLE IF NOT EXISTS ROOT_POST(FROM COMMENT TO POST, FROM POST TO POST)"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:ROOT_POST]->() WITH cico_e DELETE cico_e"
+     ],
+     "fill_statements": [
+      "MATCH (message:COMMENT:POST)-[e:REPLYOF*0..]->(post:POST) WITH DISTINCT message, post WITH message, post WHERE label(message) = 'COMMENT' MATCH (cico_e0:COMMENT {id: message.id}) CREATE (cico_e0)-[:ROOT_POST]->(post)",
+      "MATCH (message:COMMENT:POST)-[e:REPLYOF*0..]->(post:POST) WITH DISTINCT message, post WITH message, post WHERE label(message) = 'POST' MATCH (cico_e0:POST {id: message.id}) CREATE (cico_e0)-[:ROOT_POST]->(post)"
+     ]
+    }
+   ],
+   "statements": 9,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi4",
+   "file": "NeuG/queries/index/ldbc-bi/bi4/index.cypher",
+   "sha256": "9e8a4e64ee0a7a8d273462935a6f97dd4037c620402896044512a880aa307348",
+   "status": "planned",
+   "indexes": [
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "dependencies": {
+    "BI4_MESSAGE_COUNT()": []
+   },
+   "fingerprints": {
+    "BI4_MESSAGE_COUNT()": "3cf9087abd1453d3648ed3bbed598b127243c90d1823a58c16b8a73d5b637bce"
+   },
+   "plans": [
+    {
+     "index_id": "BI4_MESSAGE_COUNT()",
+     "fill": "FILL BI4_MESSAGE_COUNT() FROM (MATCH (forum:FORUM)-[cico_r1:CONTAINEROF]->(post:POST), (message:COMMENT:POST)-[cico_r2:REPLYOF*0..4294967295]->(post), (message)-[cico_r3:HASCREATOR]->(person:PERSON) RETURN forum.id AS cico_fill_0, person.id AS cico_fill_1, count(DISTINCT message) AS cico_fill_2)",
+     "ok": true,
+     "ddl": [
+      "CREATE REL TABLE IF NOT EXISTS BI4_MESSAGE_COUNT(FROM FORUM TO PERSON, messageCount INT64)",
+      "ALTER TABLE BI4_MESSAGE_COUNT ADD IF NOT EXISTS __neug_fill_state_n_rows_ee0b3473b5e89ea3 INT64"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:BI4_MESSAGE_COUNT]->() WITH cico_e DELETE cico_e"
+     ],
+     "fill_statements": [
+      "MATCH (message:COMMENT:POST)-[cico_r3:HASCREATOR]->(person:PERSON), (message)-[cico_r2:REPLYOF*0..]->(post:POST), (forum:FORUM)-[cico_r1:CONTAINEROF]->(post) WITH forum, person, count(DISTINCT message) AS cico_v0, 1 AS cico_v1 CREATE (forum)-[:BI4_MESSAGE_COUNT {messageCount: cico_v0, __neug_fill_state_n_rows_ee0b3473b5e89ea3: cico_v1}]->(person)"
+     ]
+    }
+   ],
+   "statements": 4,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi5",
+   "file": "NeuG/queries/index/ldbc-bi/bi5/index.cypher",
+   "sha256": "044d8bbcfbea8d981edd2f93c79f4e0c96022ab99316423099f9d6c11e1072f1",
+   "status": "planned",
+   "indexes": [
+    "COMMENT(likeCount)",
+    "POST(likeCount)",
+    "COMMENT(replyCount)",
+    "POST(replyCount)"
+   ],
+   "dependencies": {
+    "COMMENT(likeCount)": [],
+    "POST(likeCount)": [],
+    "COMMENT(replyCount)": [],
+    "POST(replyCount)": []
+   },
+   "fingerprints": {
+    "COMMENT(likeCount)": "7aff07a59833dac05e6daf7aaae4949c8fce923e40ec7c39a4afaa61365efd6d",
+    "POST(likeCount)": "92ada2c79c42cd77963820ba00d2aed415fe30cb57eda5ac0c31415d6d9fb775",
+    "COMMENT(replyCount)": "8f5882412fca25f2fbeb9e58427aed506723c0c4daf589563ad1f0a9f47b3431",
+    "POST(replyCount)": "3b555b69645e0de819306ac69f942df7f7cad5f8e1ec75681b668abc17f90821"
+   },
+   "plans": [
+    {
+     "index_id": "COMMENT(likeCount)",
+     "fill": "FILL COMMENT(likeCount) FROM (MATCH (liker:PERSON)-[cico_r1:LIKES]->(message:COMMENT) RETURN message.id AS cico_fill_0, count(liker) AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE COMMENT ADD IF NOT EXISTS likeCount INT64 DEFAULT 0",
+      "ALTER TABLE COMMENT ADD IF NOT EXISTS __neug_fill_state_n_rows_d46f5f0a4b0566f8 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH (cico_n:COMMENT) WITH cico_n SET cico_n.likeCount = 0",
+      "MATCH (cico_n:COMMENT) WITH cico_n SET cico_n.__neug_fill_state_n_rows_d46f5f0a4b0566f8 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (liker:PERSON)-[cico_r1:LIKES]->(message:COMMENT) WITH message, count(liker) AS cico_v0, count(*) AS cico_v1 SET message.likeCount = cico_v0, message.__neug_fill_state_n_rows_d46f5f0a4b0566f8 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "POST(likeCount)",
+     "fill": "FILL POST(likeCount) FROM (MATCH (liker:PERSON)-[cico_r1:LIKES]->(message:POST) RETURN message.id AS cico_fill_0, count(liker) AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE POST ADD IF NOT EXISTS likeCount INT64 DEFAULT 0",
+      "ALTER TABLE POST ADD IF NOT EXISTS __neug_fill_state_n_rows_396b848b64ef983c INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH (cico_n:POST) WITH cico_n SET cico_n.likeCount = 0",
+      "MATCH (cico_n:POST) WITH cico_n SET cico_n.__neug_fill_state_n_rows_396b848b64ef983c = 0"
+     ],
+     "fill_statements": [
+      "MATCH (liker:PERSON)-[cico_r1:LIKES]->(message:POST) WITH message, count(liker) AS cico_v0, count(*) AS cico_v1 SET message.likeCount = cico_v0, message.__neug_fill_state_n_rows_396b848b64ef983c = cico_v1"
+     ]
+    },
+    {
+     "index_id": "COMMENT(replyCount)",
+     "fill": "FILL COMMENT(replyCount) FROM (MATCH (reply:COMMENT)-[cico_r1:REPLYOF]->(message:COMMENT) RETURN message.id AS cico_fill_0, count(reply) AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE COMMENT ADD IF NOT EXISTS replyCount INT64 DEFAULT 0",
+      "ALTER TABLE COMMENT ADD IF NOT EXISTS __neug_fill_state_n_rows_d14ba99f7d76f9e5 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH (cico_n:COMMENT) WITH cico_n SET cico_n.replyCount = 0",
+      "MATCH (cico_n:COMMENT) WITH cico_n SET cico_n.__neug_fill_state_n_rows_d14ba99f7d76f9e5 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (reply:COMMENT)-[cico_r1:REPLYOF]->(message:COMMENT) WITH message, count(reply) AS cico_v0, count(*) AS cico_v1 SET message.replyCount = cico_v0, message.__neug_fill_state_n_rows_d14ba99f7d76f9e5 = cico_v1"
+     ]
+    },
+    {
+     "index_id": "POST(replyCount)",
+     "fill": "FILL POST(replyCount) FROM (MATCH (reply:COMMENT)-[cico_r1:REPLYOF]->(message:POST) RETURN message.id AS cico_fill_0, count(reply) AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE POST ADD IF NOT EXISTS replyCount INT64 DEFAULT 0",
+      "ALTER TABLE POST ADD IF NOT EXISTS __neug_fill_state_n_rows_f51c2ccc9228deba INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH (cico_n:POST) WITH cico_n SET cico_n.replyCount = 0",
+      "MATCH (cico_n:POST) WITH cico_n SET cico_n.__neug_fill_state_n_rows_f51c2ccc9228deba = 0"
+     ],
+     "fill_statements": [
+      "MATCH (reply:COMMENT)-[cico_r1:REPLYOF]->(message:POST) WITH message, count(reply) AS cico_v0, count(*) AS cico_v1 SET message.replyCount = cico_v0, message.__neug_fill_state_n_rows_f51c2ccc9228deba = cico_v1"
+     ]
+    }
+   ],
+   "statements": 20,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi6",
+   "file": "NeuG/queries/index/ldbc-bi/bi6/index.cypher",
+   "sha256": "4347b3a72e2f64dacc5413d86de3ed09c252f18426d8f1f6cd286758f5318022",
+   "status": "planned",
+   "indexes": [
+    "PERSON(likeCount)"
+   ],
+   "dependencies": {
+    "PERSON(likeCount)": []
+   },
+   "fingerprints": {
+    "PERSON(likeCount)": "d7cf8d4dc9188698b53d62eaa0e26f32658a3a924998e3dadde346134a8fce9e"
+   },
+   "plans": [
+    {
+     "index_id": "PERSON(likeCount)",
+     "fill": "FILL PERSON(likeCount) FROM (MATCH (message2:COMMENT:POST)-[cico_r1:HASCREATOR]->(person2:PERSON), (person3:PERSON)-[like:LIKES]->(message2) RETURN person2.id AS cico_fill_0, count(person3) AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "ALTER TABLE PERSON ADD IF NOT EXISTS likeCount INT64",
+      "ALTER TABLE PERSON ADD IF NOT EXISTS __neug_fill_state_n_rows_d9d56bb4708a1fb2 INT64 DEFAULT 0"
+     ],
+     "reset": [
+      "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.likeCount = NULL",
+      "MATCH (cico_n:PERSON) WITH cico_n SET cico_n.__neug_fill_state_n_rows_d9d56bb4708a1fb2 = 0"
+     ],
+     "fill_statements": [
+      "MATCH (person3:PERSON)-[like:LIKES]->(message2:COMMENT:POST), (message2)-[cico_r1:HASCREATOR]->(person2:PERSON) WITH person2, count(person3) AS cico_v0, count(*) AS cico_v1 SET person2.likeCount = cico_v0, person2.__neug_fill_state_n_rows_d9d56bb4708a1fb2 = cico_v1"
+     ]
+    }
+   ],
+   "statements": 5,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi8",
+   "file": "NeuG/queries/index/ldbc-bi/bi8/index.cypher",
+   "sha256": "edfdae19a04b99372f3fcabe401ca01112bc537beadd5b760eb3e08a0c35ee99",
+   "status": "schema_only",
+   "indexes": [],
+   "dependencies": {},
+   "fingerprints": {},
+   "plans": [],
+   "statements": 0
+  },
+  {
+   "case": "bi9",
+   "file": "NeuG/queries/index/ldbc-bi/bi9/index.cypher",
+   "sha256": "20746f38ed7f4803f8980abc36910f33299006fcc4d126725871f037b6984a67",
+   "status": "planned",
+   "indexes": [
+    "ROOT_POST()"
+   ],
+   "dependencies": {
+    "ROOT_POST()": []
+   },
+   "fingerprints": {
+    "ROOT_POST()": "2282b8e67cdd41e5adb5e02f7844de2936a11bf5cbc1a3f8e331fd00bdfdf7e2"
+   },
+   "plans": [
+    {
+     "index_id": "ROOT_POST()",
+     "fill": "FILL ROOT_POST() FROM (MATCH (message:COMMENT:POST)-[e:REPLYOF*0..4294967295]->(post:POST) RETURN DISTINCT message.id AS cico_fill_0, post.id AS cico_fill_1)",
+     "ok": true,
+     "ddl": [
+      "CREATE REL TABLE IF NOT EXISTS ROOT_POST(FROM COMMENT TO POST, FROM POST TO POST)"
+     ],
+     "reset": [
+      "MATCH ()-[cico_e:ROOT_POST]->() WITH cico_e DELETE cico_e"
+     ],
+     "fill_statements": [
+      "MATCH (message:COMMENT:POST)-[e:REPLYOF*0..]->(post:POST) WITH DISTINCT message, post WITH message, post WHERE label(message) = 'COMMENT' MATCH (cico_e0:COMMENT {id: message.id}) CREATE (cico_e0)-[:ROOT_POST]->(post)",
+      "MATCH (message:COMMENT:POST)-[e:REPLYOF*0..]->(post:POST) WITH DISTINCT message, post WITH message, post WHERE label(message) = 'POST' MATCH (cico_e0:POST {id: message.id}) CREATE (cico_e0)-[:ROOT_POST]->(post)"
+     ]
+    }
+   ],
+   "statements": 4,
+   "kuzu_explain": "ok"
+  }
+ ],
+ "rewrites": [
+  {
+   "case": "bi10",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-10.cypher",
+   "parameters": {
+    "country": "United_Kingdom",
+    "tagClass": "BaseballPlayer",
+    "personId": "10995116284483",
+    "minPathDistance": "3",
+    "maxPathDistance": "4"
+   },
+   "registered": [
+    "PERSON(countryName)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "frontend_unsupported",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: frontend_unsupported NeuG: Parser exception: Invalid input <MATCH (startPerson:PERSON {id: $personId})-[path:KNOWS* SHORTEST 1..$>: expected rule oC_RegularQuery (line: 1, offset: 68)\n\"MATCH (startPerson:PERSON {id: $pers",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi11",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-11.cypher",
+   "parameters": {
+    "startDate": "2012-10-11 00:00:00",
+    "endDate": "2013-01-23 00:00:00",
+    "country": "India"
+   },
+   "registered": [
+    "PERSON(countryName)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected | part 2: no_index_selected | part 3: no_index_selected | part 4: no_index_selected",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi13",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-13.cypher",
+   "parameters": {
+    "endDate": "2012-10-28 00:00:00",
+    "country": "India"
+   },
+   "registered": [
+    "PERSON(bi13MessageCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "PERSON(bi13MessageCount)"
+   ],
+   "specialized": [
+    "endDate"
+   ],
+   "premises": [],
+   "detail": "valid only for the given values of $endDate",
+   "output": "MATCH (country:PLACE {name: $country})<-[:ISPARTOF]-(city:PLACE)<-[:ISLOCATEDIN]-(zombie:PERSON)\nWHERE country.type = 'Country'\n  AND city.type = 'City'\n  AND CAST(zombie.creationDate AS TIMESTAMP) < CAST($endDate AS TIMESTAMP)\nWITH country, zombie WITH country, zombie, sum(CASE WHEN (zombie.bi13MessageCount IS NULL) THEN 0 ELSE zombie.bi13MessageCount END) AS messageCount WITH\n  country,\n  zombie,\n  12 * (\n    date_part('year', CAST($endDate AS TIMESTAMP))\n    - date_part('year', CAST(zombie.creationDate AS TIMESTAMP))\n  )\n    + (\n      date_part('month', CAST($endDate AS TIMESTAMP))\n      - date_part('month', CAST(zombie.creationDate AS TIMESTAMP))\n    )\n    + 1 AS months,\n  messageCount\nWHERE CAST(messageCount AS DOUBLE) / CAST(months AS DOUBLE) < 1.0 WITH collect(zombie.id) AS zombieIds UNWIND zombieIds AS zombieId\nMATCH (zombie:PERSON {id: zombieId})\nOPTIONAL MATCH\n  (zombie)<-[:HASCREATOR]-(:POST:COMMENT)<-[:LIKES]-(likerZombie:PERSON)\nWHERE likerZombie.id IN zombieIds\nWITH zombieIds, zombieId, count(likerZombie) AS zombieLikeCount MATCH (zombie:PERSON {id: zombieId})\nOPTIONAL MATCH\n  (zombie)<-[:HASCREATOR]-(:POST:COMMENT)<-[:LIKES]-(likerPerson:PERSON)\nWHERE CAST(likerPerson.creationDate AS TIMESTAMP) < CAST($endDate AS TIMESTAMP)\nWITH zombieId, zombieLikeCount, count(likerPerson) AS totalLikeCount RETURN\n  zombieId,\n  zombieLikeCount,\n  totalLikeCount,\n  CASE totalLikeCount WHEN 0 THEN 0.0 ELSE CAST(zombieLikeCount AS DOUBLE) / CAST(totalLikeCount AS DOUBLE) END AS zombieScore\nORDER BY zombieScore DESC, zombieId ASC\nLIMIT 100",
+   "seconds": 0.2,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi14",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-14.cypher",
+   "parameters": {
+    "country1": "China",
+    "country2": "Canada"
+   },
+   "registered": [
+    "KNOWS(bi14_case1_fwd)",
+    "KNOWS(bi14_case1_rev)",
+    "KNOWS(bi14_case2_fwd)",
+    "KNOWS(bi14_case2_rev)",
+    "KNOWS(bi14_case3_fwd)",
+    "KNOWS(bi14_case3_rev)",
+    "KNOWS(bi14_case4_fwd)",
+    "KNOWS(bi14_case4_rev)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected | part 2: no_index_selected statement changed without reading an index | part 3: no_index_selected statement changed without reading an index | part 4: no_index_selected | part 5: no_index_selected",
+   "output": "",
+   "seconds": 0.3
+  },
+  {
+   "case": "bi15",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-15.cypher",
+   "parameters": {
+    "person1Id": "1450",
+    "person2Id": "21990232556222"
+   },
+   "registered": [
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+    "KNOWS(bi14_case1_rev,bi15_post_rev)",
+    "KNOWS(bi15_weight)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "frontend_unsupported",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "function WSHORTEST(): not in the NeuG catalog",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi15w",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-15.cypher",
+   "parameters": {
+    "person1Id": "1450",
+    "person2Id": "21990232556222"
+   },
+   "registered": [],
+   "registration_failures": [
+    {
+     "file": "*",
+     "ok": false,
+     "reason": "KeyError",
+     "detail": "'startDate'"
+    }
+   ],
+   "rewritten": false,
+   "reason": "frontend_unsupported",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "function WSHORTEST(): not in the NeuG catalog",
+   "output": "",
+   "seconds": 0.0
+  },
+  {
+   "case": "bi16",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-16.cypher",
+   "parameters": {
+    "dateA": "2012-07-26 00:00:00",
+    "dateB": "2012-05-08 00:00:00",
+    "maxKnowsLimit": "4",
+    "tagA": "Marc_Gicquel",
+    "tagB": "Romania"
+   },
+   "registered": [
+    "PERSON(bi16MessageCountA)",
+    "PERSON(bi16MessageCountB)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected statement changed without reading an index | part 2: no_index_selected statement changed without reading an index | part 3: no_index_selected statement changed without reading an index | part 4: no_index_selected statement changed without reading an index",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi17",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-17.cypher",
+   "parameters": {
+    "tag": "I_Luv_Your_Girl",
+    "delta": "12"
+   },
+   "registered": [
+    "ROOT_POST()"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "ROOT_POST()"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected | part 3: frontend_unsupported string concatenation needs literal operands: no NeuG equivalent | part 5: part_input_unavailable an earlier QueryPart is not convertible: string concatenation needs literal operands: no NeuG equivalent",
+   "output": "MATCH (tag:TAG {name: $tag})\nMATCH (comment:COMMENT)-[:HASTAG]->(tag)\nMATCH (comment)-[:HASCREATOR]->(person2:PERSON)<-[:HASMEMBER]-(forum1:FORUM)\nMATCH (comment)-[:REPLYOF]->(message2:POST:COMMENT)\nMATCH (message2)-[:HASTAG]->(tag)\nMATCH (message2)-[:HASCREATOR]->(person3:PERSON)<-[:HASMEMBER]-(forum1)\nWHERE person2 <> person3\nWITH DISTINCT tag, forum1, message2,\n     message2.creationDate AS message2CreationDate MATCH (message2)-[cico_r1:ROOT_POST]->(post2:POST), (forum2:FORUM)-[cico_r2:CONTAINEROF]->(post2) WHERE (forum1 <> forum2) WITH DISTINCT tag, forum1, forum2, message2, message2CreationDate MATCH (message1:POST:COMMENT)-[:HASTAG]->(tag)\nMATCH (message1)-[:HASCREATOR]->(person1:PERSON)\nWHERE CAST(message1.creationDate AS TIMESTAMP)\n      + duration(CAST($delta AS STRING) + ' hours')\n      < CAST(message2CreationDate AS TIMESTAMP)\nOPTIONAL MATCH (forum2)-[person1Forum2Member:HASMEMBER]->(person1)\nWITH forum1, message1, person1, message2, person1Forum2Member\nWHERE person1Forum2Member IS NULL WITH DISTINCT forum1, message1, person1, message2 MATCH (message1)-[:REPLYOF*0..]->(post1:POST)<-[:CONTAINEROF]-(forum1)\nWITH DISTINCT person1, message2 RETURN person1.id AS personId, count(DISTINCT message2) AS messageCount\nORDER BY messageCount DESC, personId ASC\nLIMIT 10",
+   "seconds": 0.2,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi19a",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-19.cypher",
+   "parameters": {
+    "city1Id": "363",
+    "city2Id": "578"
+   },
+   "registered": [
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+    "KNOWS(bi14_case1_rev,bi15_post_rev)",
+    "KNOWS(weight_bi19)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "frontend_unsupported",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: frontend_unsupported function WSHORTEST(): not in the NeuG catalog",
+   "output": "",
+   "seconds": 0.2
+  },
+  {
+   "case": "bi2",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-2.cypher",
+   "parameters": {
+    "date": "2010-06-09 00:00:00",
+    "tagClass": "Single"
+   },
+   "registered": [
+    "TAG(bi2Window1MessageCount)",
+    "TAG(bi2Window2MessageCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 2: no_index_selected statement changed without reading an index | part 3: no_index_selected statement changed without reading an index",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi20",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-20.cypher",
+   "parameters": {},
+   "registered": [
+    "KNOWS(bi20_direct)",
+    "KNOWS(bi20_weight)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "ignored",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi3",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-3.cypher",
+   "parameters": {
+    "country": "India",
+    "tagClass": "Congressman"
+   },
+   "registered": [
+    "PERSON(countryName)",
+    "ROOT_POST()"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "ROOT_POST()"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "",
+   "output": "MATCH (message:COMMENT:POST)-[cico_r3:HASTAG]->(cico_n1:TAG), (cico_n1)-[cico_r4:HASTYPE]->(cico_n2:TAGCLASS) WHERE (cico_n2.name = $tagClass) WITH DISTINCT message MATCH (message)-[cico_r5:ROOT_POST]->(post:POST), (city:PLACE)-[cico_r6:ISPARTOF]->(country:PLACE), (person:PERSON)-[cico_r7:ISLOCATEDIN]->(city), (forum:FORUM)-[cico_r8:HASMODERATOR]->(person), (forum)-[cico_r9:CONTAINEROF]->(post) WHERE (((country.name = $country) AND (country.type = 'Country')) AND (city.type = 'City')) RETURN forum.id AS forumId, forum.title AS forumTitle, forum.creationDate AS forumCreationDate, person.id AS personId, count(DISTINCT message) AS messageCount ORDER BY messageCount DESC, forumId LIMIT 20",
+   "seconds": 0.1,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi4",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-4.cypher",
+   "parameters": {
+    "date": "2010-02-12 00:00:00"
+   },
+   "registered": [
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected | part 4: no_index_selected | part 5: frontend_unsupported NeuG: Not supported: OPTIONAL MATCH predicate requires unsupported mixed outer/inner correlation: LIST_CONTAINS(topForums,rootForum) at /mnt/sdb1/feiyang/IncGQ/src/compiler/planner/plan/plan_subquery.",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi4",
+   "variant": "query_edit",
+   "query": "/mnt/sdb1/feiyang/kuzu/implementation/middleware/query_edits/Kuzu/queries/baseline/ldbc-bi/bi-4.cypher",
+   "parameters": {
+    "date": "2010-02-12 00:00:00"
+   },
+   "registered": [
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected | part 4: no_index_selected | part 6: no_index_selected",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi5",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-5.cypher",
+   "parameters": {
+    "tag": "Begin_the_Beguine"
+   },
+   "registered": [
+    "COMMENT(likeCount)",
+    "COMMENT(replyCount)",
+    "POST(likeCount)",
+    "POST(replyCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "COMMENT(replyCount)",
+    "POST(replyCount)"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected",
+   "output": "MATCH (tag:TAG {name: $tag})<-[:HASTAG]-(message:POST:COMMENT)-[:HASCREATOR]->(person:PERSON)\nOPTIONAL MATCH (message)<-[likes:LIKES]-(:PERSON)\nWITH person, message, count(likes) AS likeCount WITH person, message, likeCount, sum(CASE WHEN (message.replyCount IS NULL) THEN 0 ELSE message.replyCount END) AS replyCount WITH person, count(message) AS messageCount, sum(likeCount) AS likeCount, sum(replyCount) AS replyCount RETURN\n  person.id AS personId,\n  replyCount,\n  likeCount,\n  messageCount,\n  messageCount + 2 * replyCount + 10 * likeCount AS score\nORDER BY score DESC, personId ASC\nLIMIT 100",
+   "seconds": 0.1,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi6",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-6.cypher",
+   "parameters": {
+    "tag": "Kingdom_of_Romania"
+   },
+   "registered": [
+    "PERSON(likeCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi8",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-8.cypher",
+   "parameters": {
+    "startDate": "2010-06-12 00:00:00",
+    "endDate": "2010-06-22 00:00:00",
+    "tag": "Che_Guevara"
+   },
+   "registered": [
+    "PERSON(bi8MessageCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "PERSON(bi8MessageCount)"
+   ],
+   "specialized": [
+    "startDate",
+    "endDate",
+    "tag"
+   ],
+   "premises": [],
+   "detail": "valid only for the given values of $startDate, $endDate, $tag",
+   "output": "MATCH(p:PERSON)\nOPTIONAL MATCH(p)-[i:HASINTEREST]->(it:TAG) WHERE it.name=$tag\nWITH p.id AS pid,count(i) AS ic MATCH (p:PERSON) WHERE (p.id = pid) WITH pid, ic, CASE WHEN (p.bi8MessageCount IS NULL) THEN 0 ELSE p.bi8MessageCount END AS mc WITH pid,100*ic+mc AS score WHERE score>0 MATCH(p:PERSON {id:pid}) OPTIONAL MATCH(p)-[k:KNOWS]-(friend:PERSON)\nWITH pid,score,friend.id AS fid,count(k) AS multiplicity OPTIONAL MATCH(friend:PERSON {id:fid})-[fi:HASINTEREST]->(ft:TAG) WHERE ft.name=$tag\nWITH pid,score,fid,multiplicity,count(fi) AS fic OPTIONAL MATCH(friend:PERSON {id:fid})<-[:HASCREATOR]-(fm:POST:COMMENT)-[:HASTAG]->(fmt:TAG)\nWHERE fmt.name=$tag AND fm.creationDate>$startDate AND fm.creationDate<$endDate\n\n\nWITH pid,score,fid,multiplicity,fic,count(fm) AS fmc RETURN pid AS personId,score,coalesce(sum(multiplicity*(100*fic+fmc)),0) AS friendsScore\nORDER BY score+friendsScore DESC,personId ASC LIMIT 100",
+   "seconds": 0.2,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi9",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-9.cypher",
+   "parameters": {
+    "startDate": "2012-09-03 00:00:00",
+    "endDate": "2012-11-30 00:00:00"
+   },
+   "registered": [
+    "ROOT_POST()"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "ROOT_POST()"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "",
+   "output": "MATCH (post:POST)-[cico_r1:HASCREATOR]->(person:PERSON), (reply:COMMENT:POST)-[cico_r2:ROOT_POST]->(post) WHERE ((((post.creationDate >= $startDate) AND (post.creationDate <= $endDate)) AND (reply.creationDate >= $startDate)) AND (reply.creationDate <= $endDate)) RETURN person.id AS personId, person.firstName AS personFirstName, person.lastName AS personLastName, count(DISTINCT post) AS threadCount, count(DISTINCT reply) AS messageCount ORDER BY messageCount DESC, personId LIMIT 100",
+   "seconds": 0.1,
+   "kuzu_explain": "ok"
+  }
+ ],
+ "build": {
+  "fill_file": "/mnt/sdb1/feiyang/kuzu/middleware/indexes/ldbc-bi-kuzu.cypher",
+  "state_file": "/tmp/cico_kuzu_bi/build-state.json",
+  "reload": {
+   "files": [
+    "/mnt/sdb1/feiyang/kuzu/middleware/indexes/ldbc-bi-kuzu.cypher"
+   ],
+   "target": "{\"device\": 66306, \"inode\": 18009049, \"path\": \"/tmp/cico_kuzu_bi/kuzu-bi\", \"system\": \"kuzu\"}",
+   "added": [
+    "PERSON(countryName)",
+    "ROOT_POST()",
+    "COMMENT(likeCount)",
+    "POST(likeCount)",
+    "COMMENT(replyCount)",
+    "POST(replyCount)",
+    "PERSON(likeCount)",
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "changed": [],
+   "unchanged": [],
+   "removed": [],
+   "pending": [],
+   "built": [
+    "PERSON(countryName)",
+    "ROOT_POST()",
+    "COMMENT(likeCount)",
+    "POST(likeCount)",
+    "COMMENT(replyCount)",
+    "POST(replyCount)",
+    "PERSON(likeCount)",
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "active": [
+    "PERSON(countryName)",
+    "ROOT_POST()",
+    "COMMENT(likeCount)",
+    "POST(likeCount)",
+    "COMMENT(replyCount)",
+    "POST(replyCount)",
+    "PERSON(likeCount)",
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "dependencies": {
+    "PERSON(countryName)": [],
+    "ROOT_POST()": [],
+    "COMMENT(likeCount)": [],
+    "POST(likeCount)": [],
+    "COMMENT(replyCount)": [],
+    "POST(replyCount)": [],
+    "PERSON(likeCount)": [],
+    "BI4_MESSAGE_COUNT()": []
+   },
+   "fingerprints": {
+    "PERSON(countryName)": "73ebbb0484325d10265e84a539252b8417bba72db596b7249c9712b051b26587",
+    "ROOT_POST()": "2282b8e67cdd41e5adb5e02f7844de2936a11bf5cbc1a3f8e331fd00bdfdf7e2",
+    "COMMENT(likeCount)": "7aff07a59833dac05e6daf7aaae4949c8fce923e40ec7c39a4afaa61365efd6d",
+    "POST(likeCount)": "92ada2c79c42cd77963820ba00d2aed415fe30cb57eda5ac0c31415d6d9fb775",
+    "COMMENT(replyCount)": "8f5882412fca25f2fbeb9e58427aed506723c0c4daf589563ad1f0a9f47b3431",
+    "POST(replyCount)": "3b555b69645e0de819306ac69f942df7f7cad5f8e1ec75681b668abc17f90821",
+    "PERSON(likeCount)": "d7cf8d4dc9188698b53d62eaa0e26f32658a3a924998e3dadde346134a8fce9e",
+    "BI4_MESSAGE_COUNT()": "3cf9087abd1453d3648ed3bbed598b127243c90d1823a58c16b8a73d5b637bce"
+   }
+  },
+  "reload_seconds": 173.8,
+  "second_reload": {
+   "built": [],
+   "pending": [],
+   "unchanged": [
+    "PERSON(countryName)",
+    "ROOT_POST()",
+    "COMMENT(likeCount)",
+    "POST(likeCount)",
+    "COMMENT(replyCount)",
+    "POST(replyCount)",
+    "PERSON(likeCount)",
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "seconds": 0.4
+  },
+  "comparisons": [
+   {
+    "query": "bi-1.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-1.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-1.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-2.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-2.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-2.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-3.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 0,
+    "original_seconds": 22.188,
+    "rewritten_seconds": 0.155,
+    "output": "MATCH (message:COMMENT:POST)-[cico_r3:HASTAG]->(cico_n1:TAG), (cico_n1)-[cico_r4:HASTYPE]->(cico_n2:TAGCLASS) WHERE (cico_n2.name = $tagClass) WITH DISTINCT message MATCH (message)-[cico_r5:ROOT_POST]->(post:POST), (city:PLACE)-[cico_r6:ISPARTOF]->(country:PLACE), (person:PERSON)-[cico_r7:ISLOCATEDIN]->(city), (forum:FORUM)-[cico_r8:HASMODERATOR]->(person), (forum)-[cico_r9:CONTAINEROF]->(post) WHERE (((country.name = $country) AND (country.type = 'Country')) AND (city.type = 'City')) RETURN forum.id AS forumId, forum.title AS forumTitle, forum.creationDate AS forumCreationDate, person.id AS personId, count(DISTINCT message) AS messageCount ORDER BY messageCount DESC, forumId LIMIT 20",
+    "sample_rows": []
+   },
+   {
+    "query": "bi-3.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 20,
+    "original_seconds": 21.651,
+    "rewritten_seconds": 0.146,
+    "output": "MATCH (message:COMMENT:POST)-[cico_r3:HASTAG]->(cico_n1:TAG), (cico_n1)-[cico_r4:HASTYPE]->(cico_n2:TAGCLASS) WHERE (cico_n2.name = $tagClass) WITH DISTINCT message MATCH (message)-[cico_r5:ROOT_POST]->(post:POST), (city:PLACE)-[cico_r6:ISPARTOF]->(country:PLACE), (person:PERSON)-[cico_r7:ISLOCATEDIN]->(city), (forum:FORUM)-[cico_r8:HASMODERATOR]->(person), (forum)-[cico_r9:CONTAINEROF]->(post) WHERE (((country.name = $country) AND (country.type = 'Country')) AND (city.type = 'City')) RETURN forum.id AS forumId, forum.title AS forumTitle, forum.creationDate AS forumCreationDate, person.id AS personId, count(DISTINCT message) AS messageCount ORDER BY messageCount DESC, forumId LIMIT 20",
+    "sample_rows": [
+     [
+      "1099511696069",
+      "Wall of Yang Li",
+      "2011-06-21 15:16:50.285000",
+      "17592186046112",
+      "25"
+     ],
+     [
+      "137438968800",
+      "Wall of Bingyi Yang",
+      "2010-04-08 04:28:36.117000",
+      "2199023260862",
+      "19"
+     ],
+     [
+      "1099511699882",
+      "Wall of Yang Yang",
+      "2011-05-09 17:42:15.296000",
+      "17592186052516",
+      "7"
+     ],
+     [
+      "1236950656750",
+      "Wall of Yang Lei",
+      "2011-07-26 00:20:46.178000",
+      "19791209303940",
+      "7"
+     ],
+     [
+      "1236950657048",
+      "Wall of Peng Li",
+      "2011-08-13 17:30:33.571000",
+      "19791209304449",
+      "7"
+     ]
+    ]
+   },
+   {
+    "query": "bi-3.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 2,
+    "original_seconds": 21.821,
+    "rewritten_seconds": 0.147,
+    "output": "MATCH (message:COMMENT:POST)-[cico_r3:HASTAG]->(cico_n1:TAG), (cico_n1)-[cico_r4:HASTYPE]->(cico_n2:TAGCLASS) WHERE (cico_n2.name = $tagClass) WITH DISTINCT message MATCH (message)-[cico_r5:ROOT_POST]->(post:POST), (city:PLACE)-[cico_r6:ISPARTOF]->(country:PLACE), (person:PERSON)-[cico_r7:ISLOCATEDIN]->(city), (forum:FORUM)-[cico_r8:HASMODERATOR]->(person), (forum)-[cico_r9:CONTAINEROF]->(post) WHERE (((country.name = $country) AND (country.type = 'Country')) AND (city.type = 'City')) RETURN forum.id AS forumId, forum.title AS forumTitle, forum.creationDate AS forumCreationDate, person.id AS personId, count(DISTINCT message) AS messageCount ORDER BY messageCount DESC, forumId LIMIT 20",
+    "sample_rows": [
+     [
+      "1099511637080",
+      "Group for Ira_Gershwin in Haldia",
+      "2011-05-17 07:01:49.393000",
+      "9241",
+      "2"
+     ],
+     [
+      "549755856762",
+      "Wall of Shweta Singh",
+      "2010-09-15 01:07:06.207000",
+      "8796093028667",
+      "1"
+     ]
+    ]
+   },
+   {
+    "query": "bi-4.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-4.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-4.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-4.cypher",
+    "variant": "query_edit",
+    "sample": 0,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 22.812,
+    "rewritten_seconds": 1.869,
+    "output": "MATCH (country:PLACE)<-[:ISPARTOF]-(city:PLACE)<-[:ISLOCATEDIN]-(member:PERSON)<-[:HASMEMBER]-(forum:FORUM)\nWHERE country.type = 'Country'\n  AND city.type = 'City'\n  AND CAST(forum.creationDate AS TIMESTAMP) > CAST($date AS TIMESTAMP)\nWITH country, forum, count(member) AS numberOfMembers WITH forum, max(numberOfMembers) AS numberOfMembers\nORDER BY numberOfMembers DESC, forum.id ASC\nLIMIT 100 WITH collect(forum) AS topForums UNWIND topForums AS memberForum\nMATCH (person:PERSON)<-[:HASMEMBER]-(memberForum)\nWITH DISTINCT topForums, person UNWIND topForums AS topForum\nWITH person, topForum.id AS rootForumId OPTIONAL MATCH (message:COMMENT:POST)-[cico_r1:HASCREATOR]->(person), (message)-[cico_r2:ROOT_POST]->(post:POST), (rootForum:FORUM)-[cico_r3:CONTAINEROF]->(post) WHERE (rootForum.id = rootForumId) WITH person, count(DISTINCT message) AS messageCount RETURN\n  person.id AS personId,\n  person.firstName AS personFirstName,\n  person.lastName AS personLastName,\n  person.creationDate AS personCreationDate,\n  messageCount\nORDER BY messageCount DESC, personId ASC\nLIMIT 100",
+    "sample_rows": [
+     [
+      "4398046519825",
+      "Ahmad Rafiq",
+      "Akbar",
+      "2010-05-23 13:24:43.393000",
+      "1195"
+     ],
+     [
+      "6597069774064",
+      "Ayesha",
+      "Ahmed",
+      "2010-08-25 11:58:50.853000",
+      "948"
+     ],
+     [
+      "15393162797132",
+      "Shweta",
+      "Kapoor",
+      "2011-04-17 02:52:48.739000",
+      "835"
+     ],
+     [
+      "2199023265231",
+      "Wei",
+      "Wang",
+      "2010-04-21 01:27:43.705000",
+      "738"
+     ],
+     [
+      "24189255819865",
+      "Sombat",
+      "Amarttayakul",
+      "2011-11-12 21:04:25.195000",
+      "435"
+     ]
+    ]
+   },
+   {
+    "query": "bi-4.cypher",
+    "variant": "query_edit",
+    "sample": 1,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 23.108,
+    "rewritten_seconds": 1.83,
+    "output": "MATCH (country:PLACE)<-[:ISPARTOF]-(city:PLACE)<-[:ISLOCATEDIN]-(member:PERSON)<-[:HASMEMBER]-(forum:FORUM)\nWHERE country.type = 'Country'\n  AND city.type = 'City'\n  AND CAST(forum.creationDate AS TIMESTAMP) > CAST($date AS TIMESTAMP)\nWITH country, forum, count(member) AS numberOfMembers WITH forum, max(numberOfMembers) AS numberOfMembers\nORDER BY numberOfMembers DESC, forum.id ASC\nLIMIT 100 WITH collect(forum) AS topForums UNWIND topForums AS memberForum\nMATCH (person:PERSON)<-[:HASMEMBER]-(memberForum)\nWITH DISTINCT topForums, person UNWIND topForums AS topForum\nWITH person, topForum.id AS rootForumId OPTIONAL MATCH (message:COMMENT:POST)-[cico_r1:HASCREATOR]->(person), (message)-[cico_r2:ROOT_POST]->(post:POST), (rootForum:FORUM)-[cico_r3:CONTAINEROF]->(post) WHERE (rootForum.id = rootForumId) WITH person, count(DISTINCT message) AS messageCount RETURN\n  person.id AS personId,\n  person.firstName AS personFirstName,\n  person.lastName AS personLastName,\n  person.creationDate AS personCreationDate,\n  messageCount\nORDER BY messageCount DESC, personId ASC\nLIMIT 100",
+    "sample_rows": [
+     [
+      "2866",
+      "Eve-Mary Thai",
+      "Hoang",
+      "2010-02-05 03:07:01.196000",
+      "1514"
+     ],
+     [
+      "4398046519825",
+      "Ahmad Rafiq",
+      "Akbar",
+      "2010-05-23 13:24:43.393000",
+      "1192"
+     ],
+     [
+      "6597069774064",
+      "Ayesha",
+      "Ahmed",
+      "2010-08-25 11:58:50.853000",
+      "948"
+     ],
+     [
+      "15393162797132",
+      "Shweta",
+      "Kapoor",
+      "2011-04-17 02:52:48.739000",
+      "853"
+     ],
+     [
+      "2199023265231",
+      "Wei",
+      "Wang",
+      "2010-04-21 01:27:43.705000",
+      "750"
+     ]
+    ]
+   },
+   {
+    "query": "bi-4.cypher",
+    "variant": "query_edit",
+    "sample": 2,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 23.072,
+    "rewritten_seconds": 1.794,
+    "output": "MATCH (country:PLACE)<-[:ISPARTOF]-(city:PLACE)<-[:ISLOCATEDIN]-(member:PERSON)<-[:HASMEMBER]-(forum:FORUM)\nWHERE country.type = 'Country'\n  AND city.type = 'City'\n  AND CAST(forum.creationDate AS TIMESTAMP) > CAST($date AS TIMESTAMP)\nWITH country, forum, count(member) AS numberOfMembers WITH forum, max(numberOfMembers) AS numberOfMembers\nORDER BY numberOfMembers DESC, forum.id ASC\nLIMIT 100 WITH collect(forum) AS topForums UNWIND topForums AS memberForum\nMATCH (person:PERSON)<-[:HASMEMBER]-(memberForum)\nWITH DISTINCT topForums, person UNWIND topForums AS topForum\nWITH person, topForum.id AS rootForumId OPTIONAL MATCH (message:COMMENT:POST)-[cico_r1:HASCREATOR]->(person), (message)-[cico_r2:ROOT_POST]->(post:POST), (rootForum:FORUM)-[cico_r3:CONTAINEROF]->(post) WHERE (rootForum.id = rootForumId) WITH person, count(DISTINCT message) AS messageCount RETURN\n  person.id AS personId,\n  person.firstName AS personFirstName,\n  person.lastName AS personLastName,\n  person.creationDate AS personCreationDate,\n  messageCount\nORDER BY messageCount DESC, personId ASC\nLIMIT 100",
+    "sample_rows": [
+     [
+      "2866",
+      "Eve-Mary Thai",
+      "Hoang",
+      "2010-02-05 03:07:01.196000",
+      "1514"
+     ],
+     [
+      "4398046519825",
+      "Ahmad Rafiq",
+      "Akbar",
+      "2010-05-23 13:24:43.393000",
+      "1185"
+     ],
+     [
+      "6597069774064",
+      "Ayesha",
+      "Ahmed",
+      "2010-08-25 11:58:50.853000",
+      "948"
+     ],
+     [
+      "15393162797132",
+      "Shweta",
+      "Kapoor",
+      "2011-04-17 02:52:48.739000",
+      "835"
+     ],
+     [
+      "2199023265231",
+      "Wei",
+      "Wang",
+      "2010-04-21 01:27:43.705000",
+      "750"
+     ]
+    ]
+   },
+   {
+    "query": "bi-5.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "COMMENT(replyCount)",
+     "POST(replyCount)"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 0.041,
+    "rewritten_seconds": 0.017,
+    "output": "MATCH (tag:TAG {name: $tag})<-[:HASTAG]-(message:POST:COMMENT)-[:HASCREATOR]->(person:PERSON)\nOPTIONAL MATCH (message)<-[likes:LIKES]-(:PERSON)\nWITH person, message, count(likes) AS likeCount WITH person, message, likeCount, sum(CASE WHEN (message.replyCount IS NULL) THEN 0 ELSE message.replyCount END) AS replyCount WITH person, count(message) AS messageCount, sum(likeCount) AS likeCount, sum(replyCount) AS replyCount RETURN\n  person.id AS personId,\n  replyCount,\n  likeCount,\n  messageCount,\n  messageCount + 2 * replyCount + 10 * likeCount AS score\nORDER BY score DESC, personId ASC\nLIMIT 100",
+    "sample_rows": [
+     [
+      "17592186051955",
+      "1",
+      "130",
+      "1",
+      "1303"
+     ],
+     [
+      "32985348840714",
+      "2",
+      "115",
+      "1",
+      "1155"
+     ],
+     [
+      "19791209306632",
+      "4",
+      "51",
+      "1",
+      "519"
+     ],
+     [
+      "13194139539234",
+      "2",
+      "25",
+      "1",
+      "255"
+     ],
+     [
+      "24189255814693",
+      "2",
+      "19",
+      "1",
+      "195"
+     ]
+    ]
+   },
+   {
+    "query": "bi-5.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "COMMENT(replyCount)",
+     "POST(replyCount)"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 0.027,
+    "rewritten_seconds": 0.017,
+    "output": "MATCH (tag:TAG {name: $tag})<-[:HASTAG]-(message:POST:COMMENT)-[:HASCREATOR]->(person:PERSON)\nOPTIONAL MATCH (message)<-[likes:LIKES]-(:PERSON)\nWITH person, message, count(likes) AS likeCount WITH person, message, likeCount, sum(CASE WHEN (message.replyCount IS NULL) THEN 0 ELSE message.replyCount END) AS replyCount WITH person, count(message) AS messageCount, sum(likeCount) AS likeCount, sum(replyCount) AS replyCount RETURN\n  person.id AS personId,\n  replyCount,\n  likeCount,\n  messageCount,\n  messageCount + 2 * replyCount + 10 * likeCount AS score\nORDER BY score DESC, personId ASC\nLIMIT 100",
+    "sample_rows": [
+     [
+      "8796093024106",
+      "3",
+      "82",
+      "1",
+      "827"
+     ],
+     [
+      "19791209303081",
+      "0",
+      "78",
+      "1",
+      "781"
+     ],
+     [
+      "8796093030242",
+      "6",
+      "51",
+      "1",
+      "523"
+     ],
+     [
+      "2199023264850",
+      "2",
+      "26",
+      "2",
+      "266"
+     ],
+     [
+      "13194139539167",
+      "1",
+      "21",
+      "1",
+      "213"
+     ]
+    ]
+   },
+   {
+    "query": "bi-5.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "COMMENT(replyCount)",
+     "POST(replyCount)"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 0.029,
+    "rewritten_seconds": 0.02,
+    "output": "MATCH (tag:TAG {name: $tag})<-[:HASTAG]-(message:POST:COMMENT)-[:HASCREATOR]->(person:PERSON)\nOPTIONAL MATCH (message)<-[likes:LIKES]-(:PERSON)\nWITH person, message, count(likes) AS likeCount WITH person, message, likeCount, sum(CASE WHEN (message.replyCount IS NULL) THEN 0 ELSE message.replyCount END) AS replyCount WITH person, count(message) AS messageCount, sum(likeCount) AS likeCount, sum(replyCount) AS replyCount RETURN\n  person.id AS personId,\n  replyCount,\n  likeCount,\n  messageCount,\n  messageCount + 2 * replyCount + 10 * likeCount AS score\nORDER BY score DESC, personId ASC\nLIMIT 100",
+    "sample_rows": [
+     [
+      "24189255815070",
+      "1",
+      "248",
+      "1",
+      "2483"
+     ],
+     [
+      "15393162794709",
+      "3",
+      "84",
+      "1",
+      "847"
+     ],
+     [
+      "30786325579308",
+      "2",
+      "52",
+      "1",
+      "525"
+     ],
+     [
+      "10995116283735",
+      "7",
+      "44",
+      "2",
+      "456"
+     ],
+     [
+      "4688",
+      "1",
+      "26",
+      "1",
+      "263"
+     ]
+    ]
+   },
+   {
+    "query": "bi-6.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-6.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-6.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-7.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-7.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-7.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-8.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-8.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-8.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-9.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 27.108,
+    "rewritten_seconds": 0.224,
+    "output": "MATCH (post:POST)-[cico_r1:HASCREATOR]->(person:PERSON), (reply:COMMENT:POST)-[cico_r2:ROOT_POST]->(post) WHERE ((((post.creationDate >= $startDate) AND (post.creationDate <= $endDate)) AND (reply.creationDate >= $startDate)) AND (reply.creationDate <= $endDate)) RETURN person.id AS personId, person.firstName AS personFirstName, person.lastName AS personLastName, count(DISTINCT post) AS threadCount, count(DISTINCT reply) AS messageCount ORDER BY messageCount DESC, personId LIMIT 100",
+    "sample_rows": [
+     [
+      "8796093032299",
+      "Robert",
+      "Brown",
+      "144",
+      "2001"
+     ],
+     [
+      "26388279073672",
+      "Andrei",
+      "Condariuc",
+      "187",
+      "1386"
+     ],
+     [
+      "24189255815615",
+      "Dan",
+      "Andersson",
+      "127",
+      "1258"
+     ],
+     [
+      "10995116284458",
+      "Mark",
+      "Coetzee",
+      "97",
+      "1145"
+     ],
+     [
+      "28587302329167",
+      "Samir",
+      "Al-Fayez",
+      "270",
+      "1081"
+     ]
+    ]
+   },
+   {
+    "query": "bi-9.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 29.376,
+    "rewritten_seconds": 0.188,
+    "output": "MATCH (post:POST)-[cico_r1:HASCREATOR]->(person:PERSON), (reply:COMMENT:POST)-[cico_r2:ROOT_POST]->(post) WHERE ((((post.creationDate >= $startDate) AND (post.creationDate <= $endDate)) AND (reply.creationDate >= $startDate)) AND (reply.creationDate <= $endDate)) RETURN person.id AS personId, person.firstName AS personFirstName, person.lastName AS personLastName, count(DISTINCT post) AS threadCount, count(DISTINCT reply) AS messageCount ORDER BY messageCount DESC, personId LIMIT 100",
+    "sample_rows": [
+     [
+      "8796093032299",
+      "Robert",
+      "Brown",
+      "144",
+      "2001"
+     ],
+     [
+      "26388279073672",
+      "Andrei",
+      "Condariuc",
+      "188",
+      "1387"
+     ],
+     [
+      "24189255815615",
+      "Dan",
+      "Andersson",
+      "127",
+      "1258"
+     ],
+     [
+      "10995116284458",
+      "Mark",
+      "Coetzee",
+      "97",
+      "1145"
+     ],
+     [
+      "24189255811663",
+      "Chris",
+      "Hall",
+      "198",
+      "1091"
+     ]
+    ]
+   },
+   {
+    "query": "bi-9.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 100,
+    "original_seconds": 27.531,
+    "rewritten_seconds": 0.194,
+    "output": "MATCH (post:POST)-[cico_r1:HASCREATOR]->(person:PERSON), (reply:COMMENT:POST)-[cico_r2:ROOT_POST]->(post) WHERE ((((post.creationDate >= $startDate) AND (post.creationDate <= $endDate)) AND (reply.creationDate >= $startDate)) AND (reply.creationDate <= $endDate)) RETURN person.id AS personId, person.firstName AS personFirstName, person.lastName AS personLastName, count(DISTINCT post) AS threadCount, count(DISTINCT reply) AS messageCount ORDER BY messageCount DESC, personId LIMIT 100",
+    "sample_rows": [
+     [
+      "8796093032299",
+      "Robert",
+      "Brown",
+      "144",
+      "2001"
+     ],
+     [
+      "26388279073672",
+      "Andrei",
+      "Condariuc",
+      "187",
+      "1386"
+     ],
+     [
+      "24189255815615",
+      "Dan",
+      "Andersson",
+      "127",
+      "1258"
+     ],
+     [
+      "10995116284458",
+      "Mark",
+      "Coetzee",
+      "97",
+      "1145"
+     ],
+     [
+      "24189255811663",
+      "Chris",
+      "Hall",
+      "198",
+      "1091"
+     ]
+    ]
+   },
+   {
+    "query": "bi-10.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-10.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-10.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-11.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-11.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-11.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-12.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-12.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-12.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-13.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-13.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-13.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-14.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-14.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-14.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-15.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-15.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-15.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-16.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-16.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-16.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-17.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 0,
+    "original_seconds": 0.566,
+    "rewritten_seconds": 0.575,
+    "output": "MATCH (tag:TAG {name: $tag})\nMATCH (comment:COMMENT)-[:HASTAG]->(tag)\nMATCH (comment)-[:HASCREATOR]->(person2:PERSON)<-[:HASMEMBER]-(forum1:FORUM)\nMATCH (comment)-[:REPLYOF]->(message2:POST:COMMENT)\nMATCH (message2)-[:HASTAG]->(tag)\nMATCH (message2)-[:HASCREATOR]->(person3:PERSON)<-[:HASMEMBER]-(forum1)\nWHERE person2 <> person3\nWITH DISTINCT tag, forum1, message2,\n     message2.creationDate AS message2CreationDate MATCH (message2)-[cico_r1:ROOT_POST]->(post2:POST), (forum2:FORUM)-[cico_r2:CONTAINEROF]->(post2) WHERE (forum1 <> forum2) WITH DISTINCT tag, forum1, forum2, message2, message2CreationDate MATCH (message1:POST:COMMENT)-[:HASTAG]->(tag)\nMATCH (message1)-[:HASCREATOR]->(person1:PERSON)\nWHERE CAST(message1.creationDate AS TIMESTAMP)\n      + duration(CAST($delta AS STRING) + ' hours')\n      < CAST(message2CreationDate AS TIMESTAMP)\nOPTIONAL MATCH (forum2)-[person1Forum2Member:HASMEMBER]->(person1)\nWITH forum1, message1, person1, message2, person1Forum2Member\nWHERE person1Forum2Member IS NULL WITH DISTINCT forum1, message1, person1, message2 MATCH (message1)-[:REPLYOF*0..]->(post1:POST)<-[:CONTAINEROF]-(forum1)\nWITH DISTINCT person1, message2 RETURN person1.id AS personId, count(DISTINCT message2) AS messageCount\nORDER BY messageCount DESC, personId ASC\nLIMIT 10",
+    "sample_rows": []
+   },
+   {
+    "query": "bi-17.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 0,
+    "original_seconds": 0.506,
+    "rewritten_seconds": 0.526,
+    "output": "MATCH (tag:TAG {name: $tag})\nMATCH (comment:COMMENT)-[:HASTAG]->(tag)\nMATCH (comment)-[:HASCREATOR]->(person2:PERSON)<-[:HASMEMBER]-(forum1:FORUM)\nMATCH (comment)-[:REPLYOF]->(message2:POST:COMMENT)\nMATCH (message2)-[:HASTAG]->(tag)\nMATCH (message2)-[:HASCREATOR]->(person3:PERSON)<-[:HASMEMBER]-(forum1)\nWHERE person2 <> person3\nWITH DISTINCT tag, forum1, message2,\n     message2.creationDate AS message2CreationDate MATCH (message2)-[cico_r1:ROOT_POST]->(post2:POST), (forum2:FORUM)-[cico_r2:CONTAINEROF]->(post2) WHERE (forum1 <> forum2) WITH DISTINCT tag, forum1, forum2, message2, message2CreationDate MATCH (message1:POST:COMMENT)-[:HASTAG]->(tag)\nMATCH (message1)-[:HASCREATOR]->(person1:PERSON)\nWHERE CAST(message1.creationDate AS TIMESTAMP)\n      + duration(CAST($delta AS STRING) + ' hours')\n      < CAST(message2CreationDate AS TIMESTAMP)\nOPTIONAL MATCH (forum2)-[person1Forum2Member:HASMEMBER]->(person1)\nWITH forum1, message1, person1, message2, person1Forum2Member\nWHERE person1Forum2Member IS NULL WITH DISTINCT forum1, message1, person1, message2 MATCH (message1)-[:REPLYOF*0..]->(post1:POST)<-[:CONTAINEROF]-(forum1)\nWITH DISTINCT person1, message2 RETURN person1.id AS personId, count(DISTINCT message2) AS messageCount\nORDER BY messageCount DESC, personId ASC\nLIMIT 10",
+    "sample_rows": []
+   },
+   {
+    "query": "bi-17.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": true,
+    "reason": "rewritten",
+    "indexes": [
+     "ROOT_POST()"
+    ],
+    "equal": true,
+    "rows": 1,
+    "original_seconds": 0.579,
+    "rewritten_seconds": 0.58,
+    "output": "MATCH (tag:TAG {name: $tag})\nMATCH (comment:COMMENT)-[:HASTAG]->(tag)\nMATCH (comment)-[:HASCREATOR]->(person2:PERSON)<-[:HASMEMBER]-(forum1:FORUM)\nMATCH (comment)-[:REPLYOF]->(message2:POST:COMMENT)\nMATCH (message2)-[:HASTAG]->(tag)\nMATCH (message2)-[:HASCREATOR]->(person3:PERSON)<-[:HASMEMBER]-(forum1)\nWHERE person2 <> person3\nWITH DISTINCT tag, forum1, message2,\n     message2.creationDate AS message2CreationDate MATCH (message2)-[cico_r1:ROOT_POST]->(post2:POST), (forum2:FORUM)-[cico_r2:CONTAINEROF]->(post2) WHERE (forum1 <> forum2) WITH DISTINCT tag, forum1, forum2, message2, message2CreationDate MATCH (message1:POST:COMMENT)-[:HASTAG]->(tag)\nMATCH (message1)-[:HASCREATOR]->(person1:PERSON)\nWHERE CAST(message1.creationDate AS TIMESTAMP)\n      + duration(CAST($delta AS STRING) + ' hours')\n      < CAST(message2CreationDate AS TIMESTAMP)\nOPTIONAL MATCH (forum2)-[person1Forum2Member:HASMEMBER]->(person1)\nWITH forum1, message1, person1, message2, person1Forum2Member\nWHERE person1Forum2Member IS NULL WITH DISTINCT forum1, message1, person1, message2 MATCH (message1)-[:REPLYOF*0..]->(post1:POST)<-[:CONTAINEROF]-(forum1)\nWITH DISTINCT person1, message2 RETURN person1.id AS personId, count(DISTINCT message2) AS messageCount\nORDER BY messageCount DESC, personId ASC\nLIMIT 10",
+    "sample_rows": [
+     [
+      "10995116286648",
+      "1"
+     ]
+    ]
+   },
+   {
+    "query": "bi-18.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-18.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-18.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "no_index_selected",
+    "indexes": []
+   },
+   {
+    "query": "bi-19.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-19.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-19.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "frontend_unsupported",
+    "indexes": []
+   },
+   {
+    "query": "bi-20.cypher",
+    "variant": "docs",
+    "sample": 0,
+    "rewritten": false,
+    "reason": "ignored",
+    "indexes": []
+   },
+   {
+    "query": "bi-20.cypher",
+    "variant": "docs",
+    "sample": 1,
+    "rewritten": false,
+    "reason": "ignored",
+    "indexes": []
+   },
+   {
+    "query": "bi-20.cypher",
+    "variant": "docs",
+    "sample": 2,
+    "rewritten": false,
+    "reason": "ignored",
+    "indexes": []
+   }
+  ]
+ },
+ "summary": {
+  "registration": {
+   "planned": 12,
+   "schema_only": 4,
+   "unsupported": 1
+  },
+  "registration_explain": {
+   "ok": 12,
+   "n/a": 5
+  },
+  "explained_statements": 144,
+  "rewritten_docs": [
+   "bi13",
+   "bi17",
+   "bi3",
+   "bi5",
+   "bi8",
+   "bi9"
+  ],
+  "rewritten_query_edits": [],
+  "rewrite_explain": {
+   "ok": 6
+  },
+  "compared": 15,
+  "equal": 15
+ }
+}

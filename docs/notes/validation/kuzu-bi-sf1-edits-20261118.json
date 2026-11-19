@@ -1,0 +1,588 @@
+{
+ "system": "kuzu",
+ "docs_commit": "08f1a2659ea2304b7940fd15db3c23382bf37eb7",
+ "middleware_commit": "89f0263cc7a1fd9c396d2c4953747a013556a7f9",
+ "store": "runtime/bi_sf1/kuzu-db",
+ "store_copy": "/mnt/sdb1/feiyang/cico_work/kuzu_bi_rules/kuzu-bi",
+ "target": {
+  "device": 2065,
+  "inode": 173884285,
+  "path": "/mnt/sdb1/feiyang/cico_work/kuzu_bi_rules/kuzu-bi",
+  "system": "kuzu"
+ },
+ "schema": "/mnt/sdb1/feiyang/kuzu/middleware/schemas/ldbc-bi.yaml",
+ "index_input": "NeuG/queries/index/ldbc-bi",
+ "queries": "Kuzu/queries/baseline/ldbc-bi",
+ "query_edits": "/mnt/sdb1/feiyang/kuzu/implementation/middleware/query_edits",
+ "sample": 0,
+ "registration_explain_only": true,
+ "workload_queries_executed": false,
+ "rewrites": [
+  {
+   "case": "bi10",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-10.cypher",
+   "parameters": {
+    "country": "United_Kingdom",
+    "tagClass": "BaseballPlayer",
+    "personId": "10995116284483",
+    "minPathDistance": "3",
+    "maxPathDistance": "4"
+   },
+   "registered": [
+    "PERSON(countryName)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "PERSON(countryName)"
+   ],
+   "specialized": [
+    "maxPathDistance"
+   ],
+   "premises": [
+    "at_least_one: (:City)-[:ISPARTOF]->",
+    "at_least_one: (:Person)-[:ISLOCATEDIN]->",
+    "at_most_one: (:City)-[:ISPARTOF]->",
+    "at_most_one: (:Person)-[:ISLOCATEDIN]->",
+    "endpoint_labels: (:City)-[:ISPARTOF]->(:Country)",
+    "endpoint_labels: (:Person)-[:ISLOCATEDIN]->(:City)"
+   ],
+   "detail": "valid only for the given values of $maxPathDistance",
+   "output": "MATCH (message:COMMENT:POST)-[cico_r3:HASTAG]->(tag:TAG), (message)-[cico_r4:HASCREATOR]->(expertCandidatePerson:PERSON), (message)-[cico_r5:HASTAG]->(cico_n1:TAG), (cico_n1)-[cico_r6:HASTYPE]->(cico_n2:TAGCLASS), (startPerson:PERSON)-[path:KNOWS* SHORTEST 1..4]-(expertCandidatePerson) WHERE ((((((startPerson.id = $personId) AND ($minPathDistance <> 1)) AND (length(path) >= $minPathDistance)) AND (length(path) <= 4)) AND (expertCandidatePerson.countryName = $country)) AND (cico_n2.name = $tagClass)) WITH expertCandidatePerson.id AS personId, tag.name AS tagName, count(DISTINCT message) AS messageCount WHERE ($minPathDistance <> 1) RETURN personId,tagName,messageCount\nORDER BY messageCount DESC, tagName ASC, personId ASC\nLIMIT 100",
+   "seconds": 0.5,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi11",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-11.cypher",
+   "parameters": {
+    "startDate": "2012-10-11 00:00:00",
+    "endDate": "2013-01-23 00:00:00",
+    "country": "India"
+   },
+   "registered": [
+    "PERSON(countryName)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "PERSON(countryName)"
+   ],
+   "specialized": [],
+   "premises": [
+    "at_least_one: (:City)-[:ISPARTOF]->",
+    "at_least_one: (:Person)-[:ISLOCATEDIN]->",
+    "at_most_one: (:City)-[:ISPARTOF]->",
+    "at_most_one: (:Person)-[:ISLOCATEDIN]->",
+    "endpoint_labels: (:City)-[:ISPARTOF]->(:Country)",
+    "endpoint_labels: (:Person)-[:ISLOCATEDIN]->(:City)",
+    "required_property: Country.name",
+    "unique_property: Country.name"
+   ],
+   "detail": "part 4: no_index_selected",
+   "output": "MATCH (a:PERSON)-[k1:KNOWS]-(b:PERSON) WHERE ((((a.countryName = $country) AND (a.id < b.id)) AND ($startDate <= k1.creationDate)) AND (k1.creationDate <= $endDate)) WITH DISTINCT a, b MATCH (country:PLACE) WHERE ((country.name = $country) AND (country.type = 'Country')) WITH DISTINCT country, a, b MATCH (b) WHERE ((b.countryName = country.name) AND (country.type = 'Country')) WITH DISTINCT country, a, b MATCH (b)-[k2:KNOWS]-(c:PERSON) WHERE (((((b.id < c.id) AND ($startDate <= k2.creationDate)) AND (k2.creationDate <= $endDate)) AND (c.countryName = country.name)) AND (country.type = 'Country')) WITH DISTINCT a, b, c MATCH (c)-[k3:KNOWS]-(a)\nWHERE CAST($startDate AS TIMESTAMP) <= CAST(k3.creationDate AS TIMESTAMP)\n  AND CAST(k3.creationDate AS TIMESTAMP) <= CAST($endDate AS TIMESTAMP)\nWITH DISTINCT a, b, c RETURN count(*) AS count",
+   "seconds": 0.2,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi13",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-13.cypher",
+   "parameters": {
+    "endDate": "2012-10-28 00:00:00",
+    "country": "India"
+   },
+   "registered": [
+    "PERSON(bi13MessageCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "PERSON(bi13MessageCount)"
+   ],
+   "specialized": [
+    "endDate"
+   ],
+   "premises": [],
+   "detail": "valid only for the given values of $endDate",
+   "output": "MATCH (country:PLACE {name: $country})<-[:ISPARTOF]-(city:PLACE)<-[:ISLOCATEDIN]-(zombie:PERSON)\nWHERE country.type = 'Country'\n  AND city.type = 'City'\n  AND CAST(zombie.creationDate AS TIMESTAMP) < CAST($endDate AS TIMESTAMP)\nWITH country, zombie WITH country, zombie, sum(CASE WHEN (zombie.bi13MessageCount IS NULL) THEN 0 ELSE zombie.bi13MessageCount END) AS messageCount WITH\n  country,\n  zombie,\n  12 * (\n    date_part('year', CAST($endDate AS TIMESTAMP))\n    - date_part('year', CAST(zombie.creationDate AS TIMESTAMP))\n  )\n    + (\n      date_part('month', CAST($endDate AS TIMESTAMP))\n      - date_part('month', CAST(zombie.creationDate AS TIMESTAMP))\n    )\n    + 1 AS months,\n  messageCount\nWHERE CAST(messageCount AS DOUBLE) / CAST(months AS DOUBLE) < 1.0 WITH collect(zombie.id) AS zombieIds UNWIND zombieIds AS zombieId\nMATCH (zombie:PERSON {id: zombieId})\nOPTIONAL MATCH\n  (zombie)<-[:HASCREATOR]-(:POST:COMMENT)<-[:LIKES]-(likerZombie:PERSON)\nWHERE likerZombie.id IN zombieIds\nWITH zombieIds, zombieId, count(likerZombie) AS zombieLikeCount MATCH (zombie:PERSON {id: zombieId})\nOPTIONAL MATCH\n  (zombie)<-[:HASCREATOR]-(:POST:COMMENT)<-[:LIKES]-(likerPerson:PERSON)\nWHERE CAST(likerPerson.creationDate AS TIMESTAMP) < CAST($endDate AS TIMESTAMP)\nWITH zombieId, zombieLikeCount, count(likerPerson) AS totalLikeCount RETURN\n  zombieId,\n  zombieLikeCount,\n  totalLikeCount,\n  CASE totalLikeCount WHEN 0 THEN 0.0 ELSE CAST(zombieLikeCount AS DOUBLE) / CAST(totalLikeCount AS DOUBLE) END AS zombieScore\nORDER BY zombieScore DESC, zombieId ASC\nLIMIT 100",
+   "seconds": 0.2,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi14",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-14.cypher",
+   "parameters": {
+    "country1": "China",
+    "country2": "Canada"
+   },
+   "registered": [
+    "KNOWS(bi14_case1_fwd)",
+    "KNOWS(bi14_case1_rev)",
+    "KNOWS(bi14_case2_fwd)",
+    "KNOWS(bi14_case2_rev)",
+    "KNOWS(bi14_case3_fwd)",
+    "KNOWS(bi14_case3_rev)",
+    "KNOWS(bi14_case4_fwd)",
+    "KNOWS(bi14_case4_rev)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "KNOWS(bi14_case1_fwd)",
+    "KNOWS(bi14_case1_rev)",
+    "KNOWS(bi14_case3_fwd)",
+    "KNOWS(bi14_case3_rev)"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected",
+   "output": "MATCH\n  (country1:PLACE {name: $country1})<-[:ISPARTOF]-(city1:PLACE)<-[:ISLOCATEDIN]-(person1:PERSON),\n  (country2:PLACE {name: $country2})<-[:ISPARTOF]-(city2:PLACE)<-[:ISLOCATEDIN]-(person2:PERSON),\n  (person1)-[:KNOWS]-(person2)\nWHERE country1.type = 'Country'\n  AND country2.type = 'Country'\n  AND city1.type = 'City'\n  AND city2.type = 'City'\nWITH person1, person2, city1, 0 AS score OPTIONAL MATCH (person1)-[cico_k:KNOWS]->(person2) OPTIONAL MATCH (person2)-[cico_k_:KNOWS]->(person1) WITH person1, person2, city1, score, CASE WHEN cico_k IS NOT NULL THEN coalesce(cico_k.bi14_case1_fwd, 0) > 0 WHEN cico_k_ IS NOT NULL THEN coalesce(cico_k_.bi14_case1_rev, 0) > 0 ELSE EXISTS { MATCH (person1)<-[:HASCREATOR]-(c:COMMENT)-[:REPLYOF]->(:POST:COMMENT)-[:HASCREATOR]->(person2) } END AS cico_exists WITH DISTINCT person1, person2, city1, score + (CASE WHEN (NOT cico_exists) THEN 0 ELSE 4 END) AS score OPTIONAL MATCH (person1)-[cico_k:KNOWS]->(person2) OPTIONAL MATCH (person2)-[cico_k_:KNOWS]->(person1) WITH person1, person2, city1, score, CASE WHEN cico_k IS NOT NULL THEN coalesce(cico_k.bi14_case1_rev, 0) > 0 WHEN cico_k_ IS NOT NULL THEN coalesce(cico_k_.bi14_case1_fwd, 0) > 0 ELSE EXISTS { MATCH (person1)<-[:HASCREATOR]-(m:POST:COMMENT)<-[:REPLYOF]-(:COMMENT)-[:HASCREATOR]->(person2) } END AS cico_exists WITH DISTINCT person1, person2, city1, score + (CASE WHEN (NOT cico_exists) THEN 0 ELSE 1 END) AS score OPTIONAL MATCH (person1)-[cico_k:KNOWS]->(person2) OPTIONAL MATCH (person2)-[cico_k_:KNOWS]->(person1) WITH person1, person2, city1, score, CASE WHEN cico_k IS NOT NULL THEN coalesce(cico_k.bi14_case3_fwd, 0) > 0 WHEN cico_k_ IS NOT NULL THEN coalesce(cico_k_.bi14_case3_rev, 0) > 0 ELSE EXISTS { MATCH (person1)-[:LIKES]->(m:POST:COMMENT)-[:HASCREATOR]->(person2) } END AS cico_exists WITH DISTINCT person1, person2, city1, score + (CASE WHEN (NOT cico_exists) THEN 0 ELSE 10 END) AS score OPTIONAL MATCH (person1)-[cico_k:KNOWS]->(person2) OPTIONAL MATCH (person2)-[cico_k_:KNOWS]->(person1) WITH person1, person2, city1, score, CASE WHEN cico_k IS NOT NULL THEN coalesce(cico_k.bi14_case3_rev, 0) > 0 WHEN cico_k_ IS NOT NULL THEN coalesce(cico_k_.bi14_case3_fwd, 0) > 0 ELSE EXISTS { MATCH (person1)<-[:HASCREATOR]-(m:POST:COMMENT)<-[:LIKES]-(person2) } END AS cico_exists WITH DISTINCT person1, person2, city1, score + (CASE WHEN (NOT cico_exists) THEN 0 ELSE 1 END) AS score\nORDER BY city1.name ASC, score DESC, person1.id ASC, person2.id ASC\nLIMIT 1000000000 WITH city1, collect(person1.id)[1] AS person1Id, collect(person2.id)[1] AS person2Id, collect(score)[1] AS score RETURN\n  person1Id,\n  person2Id,\n  city1.name AS cityName,\n  score\nORDER BY score DESC, person1Id ASC, person2Id ASC\nLIMIT 100",
+   "seconds": 0.3,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi15",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-15.cypher",
+   "parameters": {
+    "person1Id": "1450",
+    "person2Id": "21990232556222"
+   },
+   "registered": [
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+    "KNOWS(bi14_case1_rev,bi15_post_rev)",
+    "KNOWS(bi15_weight)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "frontend_unsupported",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "function WSHORTEST(): not in the NeuG catalog",
+   "output": "",
+   "seconds": 0.2
+  },
+  {
+   "case": "bi15w",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-15.cypher",
+   "parameters": {
+    "person1Id": "1450",
+    "person2Id": "21990232556222"
+   },
+   "registered": [],
+   "registration_failures": [
+    {
+     "file": "*",
+     "ok": false,
+     "reason": "KeyError",
+     "detail": "'startDate'"
+    }
+   ],
+   "rewritten": false,
+   "reason": "frontend_unsupported",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "function WSHORTEST(): not in the NeuG catalog",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi16",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-16.cypher",
+   "parameters": {
+    "dateA": "2012-07-26 00:00:00",
+    "dateB": "2012-05-08 00:00:00",
+    "maxKnowsLimit": "4",
+    "tagA": "Marc_Gicquel",
+    "tagB": "Romania"
+   },
+   "registered": [
+    "PERSON(bi16MessageCountA)",
+    "PERSON(bi16MessageCountB)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected statement changed without reading an index | part 2: no_index_selected statement changed without reading an index | part 3: no_index_selected statement changed without reading an index | part 4: no_index_selected statement changed without reading an index",
+   "output": "",
+   "seconds": 0.2
+  },
+  {
+   "case": "bi16",
+   "variant": "query_edit",
+   "query": "/mnt/sdb1/feiyang/kuzu/implementation/middleware/query_edits/Kuzu/queries/baseline/ldbc-bi/bi-16.cypher",
+   "parameters": {
+    "dateA": "2012-07-26 00:00:00",
+    "dateB": "2012-05-08 00:00:00",
+    "maxKnowsLimit": "4",
+    "tagA": "Marc_Gicquel",
+    "tagB": "Romania"
+   },
+   "registered": [
+    "PERSON(bi16MessageCountA)",
+    "PERSON(bi16MessageCountB)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "PERSON(bi16MessageCountA)",
+    "PERSON(bi16MessageCountB)"
+   ],
+   "specialized": [
+    "dateA",
+    "dateB",
+    "tagA",
+    "tagB"
+   ],
+   "premises": [],
+   "detail": "valid only for the given values of $dateA, $dateB, $tagA, $tagB",
+   "output": "MATCH (person1:PERSON) WITH person1, max(CASE WHEN (person1.bi16MessageCountA IS NULL) THEN 0 ELSE person1.bi16MessageCountA END) AS messageCountA WHERE (messageCountA > 0) OPTIONAL MATCH (person1)-[:KNOWS]-(friendA:PERSON)\nWITH person1, messageCountA, friendA WITH person1, messageCountA, friendA, max(CASE WHEN (friendA.bi16MessageCountA IS NULL) THEN 0 ELSE friendA.bi16MessageCountA END) AS friendMessageCountA WITH person1, messageCountA, count(DISTINCT CASE WHEN friendMessageCountA > 0 THEN friendA.id END) AS friendCountA\nWHERE friendCountA <= $maxKnowsLimit WITH person1, messageCountA, max(CASE WHEN (person1.bi16MessageCountB IS NULL) THEN 0 ELSE person1.bi16MessageCountB END) AS messageCountB WHERE (messageCountB > 0) OPTIONAL MATCH (person1)-[:KNOWS]-(friendB:PERSON)\nWITH person1, messageCountA, messageCountB, friendB WITH person1, messageCountA, messageCountB, friendB, max(CASE WHEN (friendB.bi16MessageCountB IS NULL) THEN 0 ELSE friendB.bi16MessageCountB END) AS friendMessageCountB WITH person1, messageCountA, messageCountB, count(DISTINCT CASE WHEN friendMessageCountB > 0 THEN friendB.id END) AS friendCountB\nWHERE friendCountB <= $maxKnowsLimit RETURN\n  person1.id AS personId,\n  messageCountA,\n  messageCountB\nORDER BY messageCountA + messageCountB DESC, personId ASC\nLIMIT 20",
+   "seconds": 0.4,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi17",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-17.cypher",
+   "parameters": {
+    "tag": "I_Luv_Your_Girl",
+    "delta": "12"
+   },
+   "registered": [
+    "ROOT_POST()"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "ROOT_POST()"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected | part 3: frontend_unsupported string concatenation needs literal operands: no NeuG equivalent | part 5: part_input_unavailable an earlier QueryPart is not convertible: string concatenation needs literal operands: no NeuG equivalent",
+   "output": "MATCH (tag:TAG {name: $tag})\nMATCH (comment:COMMENT)-[:HASTAG]->(tag)\nMATCH (comment)-[:HASCREATOR]->(person2:PERSON)<-[:HASMEMBER]-(forum1:FORUM)\nMATCH (comment)-[:REPLYOF]->(message2:POST:COMMENT)\nMATCH (message2)-[:HASTAG]->(tag)\nMATCH (message2)-[:HASCREATOR]->(person3:PERSON)<-[:HASMEMBER]-(forum1)\nWHERE person2 <> person3\nWITH DISTINCT tag, forum1, message2,\n     message2.creationDate AS message2CreationDate MATCH (message2)-[cico_r1:ROOT_POST]->(post2:POST), (forum2:FORUM)-[cico_r2:CONTAINEROF]->(post2) WHERE (forum1 <> forum2) WITH DISTINCT tag, forum1, forum2, message2, message2CreationDate MATCH (message1:POST:COMMENT)-[:HASTAG]->(tag)\nMATCH (message1)-[:HASCREATOR]->(person1:PERSON)\nWHERE CAST(message1.creationDate AS TIMESTAMP)\n      + duration(CAST($delta AS STRING) + ' hours')\n      < CAST(message2CreationDate AS TIMESTAMP)\nOPTIONAL MATCH (forum2)-[person1Forum2Member:HASMEMBER]->(person1)\nWITH forum1, message1, person1, message2, person1Forum2Member\nWHERE person1Forum2Member IS NULL WITH DISTINCT forum1, message1, person1, message2 MATCH (message1)-[:REPLYOF*0..]->(post1:POST)<-[:CONTAINEROF]-(forum1)\nWITH DISTINCT person1, message2 RETURN person1.id AS personId, count(DISTINCT message2) AS messageCount\nORDER BY messageCount DESC, personId ASC\nLIMIT 10",
+   "seconds": 0.2,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi19a",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-19.cypher",
+   "parameters": {
+    "city1Id": "363",
+    "city2Id": "578"
+   },
+   "registered": [
+    "KNOWS(bi14_case1_fwd,bi15_post_fwd)",
+    "KNOWS(bi14_case1_rev,bi15_post_rev)",
+    "KNOWS(weight_bi19)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "frontend_unsupported",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: frontend_unsupported function WSHORTEST(): not in the NeuG catalog",
+   "output": "",
+   "seconds": 0.2
+  },
+  {
+   "case": "bi2",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-2.cypher",
+   "parameters": {
+    "date": "2010-06-09 00:00:00",
+    "tagClass": "Single"
+   },
+   "registered": [
+    "TAG(bi2Window1MessageCount)",
+    "TAG(bi2Window2MessageCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 2: no_index_selected statement changed without reading an index | part 3: no_index_selected statement changed without reading an index",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi2",
+   "variant": "query_edit",
+   "query": "/mnt/sdb1/feiyang/kuzu/implementation/middleware/query_edits/Kuzu/queries/baseline/ldbc-bi/bi-2.cypher",
+   "parameters": {
+    "date": "2010-06-09 00:00:00",
+    "tagClass": "Single"
+   },
+   "registered": [
+    "TAG(bi2Window1MessageCount)",
+    "TAG(bi2Window2MessageCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "TAG(bi2Window1MessageCount)",
+    "TAG(bi2Window2MessageCount)"
+   ],
+   "specialized": [
+    "date"
+   ],
+   "premises": [],
+   "detail": "valid only for the given values of $date",
+   "output": "MATCH (tag:TAG)-[cico_r2:HASTYPE]->(cico_n1:TAGCLASS) WHERE (cico_n1.name = $tagClass) WITH tag, sum(CASE WHEN (tag.bi2Window1MessageCount IS NULL) THEN 0 ELSE tag.bi2Window1MessageCount END) AS countWindow1 WITH tag, countWindow1, sum(CASE WHEN (tag.bi2Window2MessageCount IS NULL) THEN 0 ELSE tag.bi2Window2MessageCount END) AS countWindow2 RETURN\n  tag.name AS name,\n  countWindow1,\n  countWindow2,\n  abs(countWindow1 - countWindow2) AS diff\nORDER BY diff DESC, name ASC\nLIMIT 100",
+   "seconds": 0.2,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi20",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-20.cypher",
+   "parameters": {},
+   "registered": [
+    "KNOWS(bi20_direct)",
+    "KNOWS(bi20_weight)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "ignored",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi3",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-3.cypher",
+   "parameters": {
+    "country": "India",
+    "tagClass": "Congressman"
+   },
+   "registered": [
+    "PERSON(countryName)",
+    "ROOT_POST()"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "ROOT_POST()"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "",
+   "output": "MATCH (message:COMMENT:POST)-[cico_r3:HASTAG]->(cico_n1:TAG), (cico_n1)-[cico_r4:HASTYPE]->(cico_n2:TAGCLASS) WHERE (cico_n2.name = $tagClass) WITH DISTINCT message MATCH (message)-[cico_r5:ROOT_POST]->(post:POST), (city:PLACE)-[cico_r6:ISPARTOF]->(country:PLACE), (person:PERSON)-[cico_r7:ISLOCATEDIN]->(city), (forum:FORUM)-[cico_r8:HASMODERATOR]->(person), (forum)-[cico_r9:CONTAINEROF]->(post) WHERE (((country.name = $country) AND (country.type = 'Country')) AND (city.type = 'City')) RETURN forum.id AS forumId, forum.title AS forumTitle, forum.creationDate AS forumCreationDate, person.id AS personId, count(DISTINCT message) AS messageCount ORDER BY messageCount DESC, forumId LIMIT 20",
+   "seconds": 0.1,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi4",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-4.cypher",
+   "parameters": {
+    "date": "2010-02-12 00:00:00"
+   },
+   "registered": [
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected | part 4: no_index_selected | part 5: frontend_unsupported NeuG: Not supported: OPTIONAL MATCH predicate requires unsupported mixed outer/inner correlation: LIST_CONTAINS(topForums,rootForum) at /mnt/sdb1/feiyang/IncGQ/src/compiler/planner/plan/plan_subquery.",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi4",
+   "variant": "query_edit",
+   "query": "/mnt/sdb1/feiyang/kuzu/implementation/middleware/query_edits/Kuzu/queries/baseline/ldbc-bi/bi-4.cypher",
+   "parameters": {
+    "date": "2010-02-12 00:00:00"
+   },
+   "registered": [
+    "BI4_MESSAGE_COUNT()"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected | part 4: no_index_selected | part 6: no_index_selected",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi5",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-5.cypher",
+   "parameters": {
+    "tag": "Begin_the_Beguine"
+   },
+   "registered": [
+    "COMMENT(likeCount)",
+    "COMMENT(replyCount)",
+    "POST(likeCount)",
+    "POST(replyCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "COMMENT(replyCount)",
+    "POST(replyCount)"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected",
+   "output": "MATCH (tag:TAG {name: $tag})<-[:HASTAG]-(message:POST:COMMENT)-[:HASCREATOR]->(person:PERSON)\nOPTIONAL MATCH (message)<-[likes:LIKES]-(:PERSON)\nWITH person, message, count(likes) AS likeCount WITH person, message, likeCount, sum(CASE WHEN (message.replyCount IS NULL) THEN 0 ELSE message.replyCount END) AS replyCount WITH person, count(message) AS messageCount, sum(likeCount) AS likeCount, sum(replyCount) AS replyCount RETURN\n  person.id AS personId,\n  replyCount,\n  likeCount,\n  messageCount,\n  messageCount + 2 * replyCount + 10 * likeCount AS score\nORDER BY score DESC, personId ASC\nLIMIT 100",
+   "seconds": 0.1,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi6",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-6.cypher",
+   "parameters": {
+    "tag": "Kingdom_of_Romania"
+   },
+   "registered": [
+    "PERSON(likeCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": false,
+   "reason": "no_index_selected",
+   "indexes": [],
+   "specialized": [],
+   "premises": [],
+   "detail": "",
+   "output": "",
+   "seconds": 0.1
+  },
+  {
+   "case": "bi6",
+   "variant": "query_edit",
+   "query": "/mnt/sdb1/feiyang/kuzu/implementation/middleware/query_edits/Kuzu/queries/baseline/ldbc-bi/bi-6.cypher",
+   "parameters": {
+    "tag": "Kingdom_of_Romania"
+   },
+   "registered": [
+    "PERSON(likeCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "PERSON(likeCount)"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "part 1: no_index_selected",
+   "output": "MATCH (tag:TAG {name: $tag})<-[:HASTAG]-(message1:POST:COMMENT)-[:HASCREATOR]->(person1:PERSON)\nOPTIONAL MATCH (message1)<-[:LIKES]-(person2:PERSON)\nWITH DISTINCT person1, person2 WITH person1, person2, sum(CASE WHEN (person2.likeCount IS NULL) THEN 0 ELSE person2.likeCount END) AS likerScore RETURN\n  person1.id AS personId,\n  sum(likerScore) AS authorityScore\nORDER BY authorityScore DESC, personId ASC\nLIMIT 100",
+   "seconds": 0.1,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi8",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-8.cypher",
+   "parameters": {
+    "startDate": "2010-06-12 00:00:00",
+    "endDate": "2010-06-22 00:00:00",
+    "tag": "Che_Guevara"
+   },
+   "registered": [
+    "PERSON(bi8MessageCount)"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "PERSON(bi8MessageCount)"
+   ],
+   "specialized": [
+    "startDate",
+    "endDate",
+    "tag"
+   ],
+   "premises": [],
+   "detail": "valid only for the given values of $startDate, $endDate, $tag",
+   "output": "MATCH(p:PERSON)\nOPTIONAL MATCH(p)-[i:HASINTEREST]->(it:TAG) WHERE it.name=$tag\nWITH p.id AS pid,count(i) AS ic MATCH (p:PERSON) WHERE (p.id = pid) WITH pid, ic, CASE WHEN (p.bi8MessageCount IS NULL) THEN 0 ELSE p.bi8MessageCount END AS mc WITH pid,100*ic+mc AS score WHERE score>0 MATCH(p:PERSON {id:pid}) OPTIONAL MATCH(p)-[k:KNOWS]-(friend:PERSON)\nWITH pid,score,friend.id AS fid,count(k) AS multiplicity OPTIONAL MATCH(friend:PERSON {id:fid})-[fi:HASINTEREST]->(ft:TAG) WHERE ft.name=$tag\nWITH pid,score,fid,multiplicity,count(fi) AS fic OPTIONAL MATCH(friend:PERSON {id:fid})<-[:HASCREATOR]-(fm:POST:COMMENT)-[:HASTAG]->(fmt:TAG)\nWHERE fmt.name=$tag AND fm.creationDate>$startDate AND fm.creationDate<$endDate\n\n\nWITH pid,score,fid,multiplicity,fic,count(fm) AS fmc RETURN pid AS personId,score,coalesce(sum(multiplicity*(100*fic+fmc)),0) AS friendsScore\nORDER BY score+friendsScore DESC,personId ASC LIMIT 100",
+   "seconds": 0.2,
+   "kuzu_explain": "ok"
+  },
+  {
+   "case": "bi9",
+   "variant": "docs",
+   "query": "/mnt/sdb1/feiyang/IncGQ-experiment-docs/Kuzu/queries/baseline/ldbc-bi/bi-9.cypher",
+   "parameters": {
+    "startDate": "2012-09-03 00:00:00",
+    "endDate": "2012-11-30 00:00:00"
+   },
+   "registered": [
+    "ROOT_POST()"
+   ],
+   "registration_failures": [],
+   "rewritten": true,
+   "reason": "rewritten",
+   "indexes": [
+    "ROOT_POST()"
+   ],
+   "specialized": [],
+   "premises": [],
+   "detail": "",
+   "output": "MATCH (post:POST)-[cico_r1:HASCREATOR]->(person:PERSON), (reply:COMMENT:POST)-[cico_r2:ROOT_POST]->(post) WHERE ((((post.creationDate >= $startDate) AND (post.creationDate <= $endDate)) AND (reply.creationDate >= $startDate)) AND (reply.creationDate <= $endDate)) RETURN person.id AS personId, person.firstName AS personFirstName, person.lastName AS personLastName, count(DISTINCT post) AS threadCount, count(DISTINCT reply) AS messageCount ORDER BY messageCount DESC, personId LIMIT 100",
+   "seconds": 0.1,
+   "kuzu_explain": "ok"
+  }
+ ],
+ "summary": {
+  "registration": {},
+  "registration_explain": {},
+  "explained_statements": 0,
+  "rewritten_docs": [
+   "bi10",
+   "bi11",
+   "bi13",
+   "bi14",
+   "bi17",
+   "bi3",
+   "bi5",
+   "bi8",
+   "bi9"
+  ],
+  "rewritten_query_edits": [
+   "bi16",
+   "bi2",
+   "bi6"
+  ],
+  "rewrite_explain": {
+   "ok": 12
+  }
+ }
+}

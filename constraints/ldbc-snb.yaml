@@ -1,0 +1,42 @@
+# LDBC SNB (BI/IC) data model: declared integrity constraints, shared by every
+# dialect (cico/constraints.py). Internal (NeuG/Kuzu) table names; a dialect
+# with another vocabulary translates them when it loads this file (Neo4j:
+# profiles/ldbc-snb-neo4j.yaml -> constraints_file).
+#
+# They are PREMISES of individual rewrite steps, never of the QueryPart
+# theorem itself. Check them on the target before trusting rewrites that list
+# them in Result.premises: IndexMiddleware.constraint_checks() /
+# tests/constraint_checks.py (every violation count must be 0).
+
+classes:                # node classes of the data model
+  Person: {tables: [PERSON]}
+  Forum: {tables: [FORUM]}
+  Post: {tables: [POST]}
+  Comment: {tables: [COMMENT]}
+  Message: {tables: [COMMENT, POST]}
+  Tag: {tables: [TAG]}
+  TagClass: {tables: [TAGCLASS]}
+  Place: {tables: [PLACE]}
+  Organisation: {tables: [ORGANISATION]}
+  Country: {table: PLACE, property: type, value: Country}      # typed classes: a predicate on a table
+  City: {table: PLACE, property: type, value: City}
+  Continent: {table: PLACE, property: type, value: Continent}
+  Company: {table: ORGANISATION, property: type, value: Company}
+  University: {table: ORGANISATION, property: type, value: University}
+
+acyclic:                # relationship types without cycles (reply trees)
+  - REPLYOF
+
+constraints:
+  - {kind: at_most_one, rel: REPLYOF, from: Message}         # a message replies to at most one message
+  - {kind: at_most_one, rel: CONTAINEROF, to: Post}          # a post lies in at most one forum
+  - {kind: at_most_one, rel: ISLOCATEDIN, from: Person}      # a person lives in at most one place
+  - {kind: at_most_one, rel: ISPARTOF, from: City}           # a city lies in at most one country
+  - {kind: at_least_one, rel: ISLOCATEDIN, from: Person}     # every person lives somewhere
+  - {kind: at_least_one, rel: ISPARTOF, from: City}          # every city lies in a country
+  - {kind: endpoint_labels, rel: ISLOCATEDIN, from: Person, to: City}
+  - {kind: endpoint_labels, rel: ISPARTOF, from: City, to: Country}
+  - {kind: unique_property, label: Tag, property: name}
+  - {kind: unique_property, label: Country, property: name}
+  - {kind: required_property, label: Tag, property: name}
+  - {kind: required_property, label: Country, property: name}

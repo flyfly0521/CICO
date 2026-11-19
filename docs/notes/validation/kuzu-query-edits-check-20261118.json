@@ -1,0 +1,364 @@
+{
+ "store": "/mnt/sdb1/feiyang/cico_work/kuzu_bi_rules/kuzu-bi",
+ "overlay": "/mnt/sdb1/feiyang/kuzu/implementation/middleware/query_edits/Kuzu/queries/baseline/ldbc-bi",
+ "indexes_used": false,
+ "checks": [
+  {
+   "query": "bi-2",
+   "sample": 0,
+   "parameters": {
+    "date": "2010-06-09 00:00:00",
+    "tagClass": "Single"
+   },
+   "rows": 100,
+   "equal": true,
+   "original_seconds": 0.05,
+   "edited_seconds": 0.34,
+   "head": [
+    [
+     "Sweet_Caroline",
+     "1",
+     "13",
+     "12"
+    ],
+    [
+     "The_Little_Drummer_Boy",
+     "3",
+     "14",
+     "11"
+    ],
+    [
+     "At_Last",
+     "1",
+     "11",
+     "10"
+    ]
+   ]
+  },
+  {
+   "query": "bi-2",
+   "sample": 1,
+   "parameters": {
+    "date": "2010-06-22 00:00:00",
+    "tagClass": "Country"
+   },
+   "rows": 100,
+   "equal": true,
+   "original_seconds": 0.05,
+   "edited_seconds": 0.28,
+   "head": [
+    [
+     "Cyprus",
+     "12",
+     "49",
+     "37"
+    ],
+    [
+     "Germany",
+     "12",
+     "47",
+     "35"
+    ],
+    [
+     "Colombia",
+     "16",
+     "49",
+     "33"
+    ]
+   ]
+  },
+  {
+   "query": "bi-2",
+   "sample": 2,
+   "parameters": {
+    "date": "2010-06-19 00:00:00",
+    "tagClass": "Philosopher"
+   },
+   "rows": 88,
+   "equal": true,
+   "original_seconds": 0.03,
+   "edited_seconds": 0.27,
+   "head": [
+    [
+     "Edmund_Burke",
+     "1",
+     "50",
+     "49"
+    ],
+    [
+     "John_Locke",
+     "18",
+     "47",
+     "29"
+    ],
+    [
+     "Georg_Wilhelm_Friedrich_Hegel",
+     "14",
+     "42",
+     "28"
+    ]
+   ]
+  },
+  {
+   "query": "bi-6",
+   "sample": 0,
+   "parameters": {
+    "tag": "Kingdom_of_Romania"
+   },
+   "rows": 100,
+   "equal": true,
+   "original_seconds": 0.53,
+   "edited_seconds": 0.49,
+   "head": [
+    [
+     "1774",
+     "172058"
+    ],
+    [
+     "9262",
+     "50524"
+    ],
+    [
+     "24189255815615",
+     "40358"
+    ]
+   ]
+  },
+  {
+   "query": "bi-6",
+   "sample": 1,
+   "parameters": {
+    "tag": "The_Christmas_Song"
+   },
+   "rows": 100,
+   "equal": true,
+   "original_seconds": 0.52,
+   "edited_seconds": 0.48,
+   "head": [
+    [
+     "6597069774064",
+     "63181"
+    ],
+    [
+     "30786325578529",
+     "47067"
+    ],
+    [
+     "6597069769521",
+     "45522"
+    ]
+   ]
+  },
+  {
+   "query": "bi-6",
+   "sample": 2,
+   "parameters": {
+    "tag": "Kushan_Empire"
+   },
+   "rows": 100,
+   "equal": true,
+   "original_seconds": 0.49,
+   "edited_seconds": 0.48,
+   "head": [
+    [
+     "28587302330701",
+     "38097"
+    ],
+    [
+     "6592",
+     "17855"
+    ],
+    [
+     "8796093025053",
+     "14071"
+    ]
+   ]
+  },
+  {
+   "query": "bi-16",
+   "sample": 0,
+   "parameters": {
+    "dateA": "2012-07-26 00:00:00",
+    "dateB": "2012-05-08 00:00:00",
+    "maxKnowsLimit": "4",
+    "tagA": "Marc_Gicquel",
+    "tagB": "Romania"
+   },
+   "rows": 1,
+   "equal": true,
+   "original_seconds": 9.27,
+   "edited_seconds": 0.37,
+   "head": [
+    [
+     "10995116286390",
+     "3",
+     "1"
+    ]
+   ]
+  },
+  {
+   "query": "bi-16",
+   "sample": 1,
+   "parameters": {
+    "dateA": "2011-06-14 00:00:00",
+    "dateB": "2012-12-11 00:00:00",
+    "maxKnowsLimit": "6",
+    "tagA": "David_Hockney",
+    "tagB": "Thomas_Jefferson"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.76,
+   "edited_seconds": 0.22,
+   "head": []
+  },
+  {
+   "query": "bi-16",
+   "sample": 2,
+   "parameters": {
+    "dateA": "2012-07-14 00:00:00",
+    "dateB": "2012-12-29 00:00:00",
+    "maxKnowsLimit": "3",
+    "tagA": "Ivan_Ljubičić",
+    "tagB": "Turkey"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.18,
+   "edited_seconds": 0.23,
+   "head": []
+  },
+  {
+   "query": "bi-16",
+   "sample": 3,
+   "parameters": {
+    "dateA": "2012-07-14 00:00:00",
+    "dateB": "2012-12-16 00:00:00",
+    "maxKnowsLimit": "6",
+    "tagA": "Ivan_Ljubičić",
+    "tagB": "Niccolò_Machiavelli"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.19,
+   "edited_seconds": 0.23,
+   "head": []
+  },
+  {
+   "query": "bi-16",
+   "sample": 4,
+   "parameters": {
+    "dateA": "2012-05-20 00:00:00",
+    "dateB": "2012-12-12 00:00:00",
+    "maxKnowsLimit": "3",
+    "tagA": "Vinicius_de_Moraes",
+    "tagB": "Abraham_Lincoln"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.34,
+   "edited_seconds": 0.23,
+   "head": []
+  },
+  {
+   "query": "bi-16",
+   "sample": 5,
+   "parameters": {
+    "dateA": "2012-10-08 00:00:00",
+    "dateB": "2012-12-05 00:00:00",
+    "maxKnowsLimit": "5",
+    "tagA": "Diosdado_Macapagal",
+    "tagB": "Czechoslovakia"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.31,
+   "edited_seconds": 0.24,
+   "head": []
+  },
+  {
+   "query": "bi-16",
+   "sample": 6,
+   "parameters": {
+    "dateA": "2012-04-20 00:00:00",
+    "dateB": "2012-12-11 00:00:00",
+    "maxKnowsLimit": "4",
+    "tagA": "John_Rhys-Davies",
+    "tagB": "Thomas_Jefferson"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.41,
+   "edited_seconds": 0.24,
+   "head": []
+  },
+  {
+   "query": "bi-16",
+   "sample": 7,
+   "parameters": {
+    "dateA": "2012-06-22 00:00:00",
+    "dateB": "2012-11-17 00:00:00",
+    "maxKnowsLimit": "3",
+    "tagA": "Bobby_Hull",
+    "tagB": "Jim_Carrey"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.48,
+   "edited_seconds": 0.26,
+   "head": []
+  },
+  {
+   "query": "bi-16",
+   "sample": 8,
+   "parameters": {
+    "dateA": "2012-05-09 00:00:00",
+    "dateB": "2012-12-26 00:00:00",
+    "maxKnowsLimit": "6",
+    "tagA": "Imelda_Marcos",
+    "tagB": "Paul_Keres"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.56,
+   "edited_seconds": 0.27,
+   "head": []
+  },
+  {
+   "query": "bi-16",
+   "sample": 9,
+   "parameters": {
+    "dateA": "2010-12-30 00:00:00",
+    "dateB": "2011-10-12 00:00:00",
+    "maxKnowsLimit": "4",
+    "tagA": "Chulalongkorn",
+    "tagB": "William_Blake"
+   },
+   "rows": 0,
+   "equal": true,
+   "original_seconds": 7.5,
+   "edited_seconds": 0.25,
+   "head": []
+  }
+ ],
+ "premises": {
+  "bi-6: every message has at most one creator": 0
+ },
+ "summary": {
+  "checked": 16,
+  "equal": 16,
+  "premise_violations": {
+   "bi-6: every message has at most one creator": 0
+  }
+ },
+ "bi16_branch_A_intermediate": {
+  "note": "original vs edited, stopped after friendCountA (no maxKnowsLimit filter), result multisets",
+  "samples": {
+   "0": "equal, 184 rows, 179 with friendCountA > 0",
+   "1": "equal, 153 rows, 123",
+   "2": "equal, 212 rows, 202",
+   "3": "equal, 212 rows, 202",
+   "4": "equal, 297 rows, 296"
+  }
+ }
+}

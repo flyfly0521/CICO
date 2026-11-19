@@ -1,0 +1,5 @@
+# Applied in order by tools/extract_neug.py (NeuG-relative paths).
+neug-rootpost-group-coverage.patch
+neug-unrelated-distinct-count.patch
+neug-temporal-predicate-keys.patch
+neug-total-distinct-count.patch
