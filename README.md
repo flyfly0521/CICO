@@ -107,6 +107,8 @@ schema 要描述目标系统（同一数据集在不同系统中属性类型可�
 
 ## 移植到新系统
 
+分步指南与可运行示例见 [guide/new-database.md](guide/new-database.md)。
+
 方言由两部分组成：**dialect** 把 Bound IR 打印成目标语法，**frontend** 把目标语法翻译成内部的 NeuG 方言。接入新系统：写 schema 映射文件（schema 相同可省略）→ 在 `cico/dialects/` 中继承 `Dialect` 覆盖不同写法 → 输入语法有差异时写 frontend（参考 `cico/neo4j.py`）→ 在 `cico/profiles.py` 中 `register()`。验证守卫会把新方言的输出翻译回内部方言重新绑定，方言实现中的错误只会导致回退原查询。已处理的方言语义差异（Neo4j 关系唯一性、子类型标签、变长路径 trail/walk、缺失函数等）见 [docs/dialects.md](docs/dialects.md)。
 
 ## 目录
@@ -116,14 +118,14 @@ cico/                           Python 中间件：middleware.py（IndexMiddlewa
                                 materialize.py、registry.py、targets.py、dialects/、neo4j.py、server.py、__main__.py …
 schemas/ constraints/ profiles/ 数据集 schema、声明约束、Neo4j 映射
 indexes/                        可导入的 NeuG 索引脚本
-query_edits/                    实验文档查询的等价改写版本（测试时自动替换原文件，CICO_QUERY_OVERLAY='' 关闭）
-tests/                          单元测试、语料回归、覆盖率、真实系统验收
+tests/                          单元测试、语料回归、覆盖率、真实系统验收；baseline 查询的等价改写版本读自实验文档 `<System>/queries/input/`（CICO_QUERY_INPUT=0 关闭）
 engine/rewrite_engine.cc        cico_engine：只做编译的改写服务（内存目录、运行时 FILL、选中方案复现，JSON lines 协议）
 engine/bound_ir.h               Bound IR v2 序列化（引擎 → Python 打印器）
 compiler/                       Cypher 编译器源码（parser、binder、索引改写器、planner）、proto、语法
 third_party/                    随仓库提供的小型第三方库
 CMakeLists.txt, cmake/          C++ 构建与固定版本依赖
 tools/                          fetch_deps.sh（离线依赖）、sync_compiler.py（合并上游 NeuG）、neug_exec/（可选测试执行器）
+guide/                          新数据库接入指南与示例
 docs/                           方言说明；docs/notes/ 为实现记录、迁移记录与历史验证结果
 ```
 

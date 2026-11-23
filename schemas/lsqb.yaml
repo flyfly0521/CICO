@@ -1,0 +1,279 @@
+name: lsqb-baseline
+store_type: mutable_csr
+schema:
+  vertex_types:
+  - type_name: City
+    type_id: 0
+    properties:
+    - property_id: 0
+      property_name: CityId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - CityId
+  - type_name: Comment
+    type_id: 1
+    properties:
+    - property_id: 0
+      property_name: CommentId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - CommentId
+  - type_name: Company
+    type_id: 2
+    properties:
+    - property_id: 0
+      property_name: CompanyId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - CompanyId
+  - type_name: Continent
+    type_id: 3
+    properties:
+    - property_id: 0
+      property_name: ContinentId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - ContinentId
+  - type_name: Country
+    type_id: 4
+    properties:
+    - property_id: 0
+      property_name: CountryId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - CountryId
+  - type_name: Forum
+    type_id: 5
+    properties:
+    - property_id: 0
+      property_name: ForumId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - ForumId
+  - type_name: Person
+    type_id: 6
+    properties:
+    - property_id: 0
+      property_name: PersonId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - PersonId
+  - type_name: Post
+    type_id: 7
+    properties:
+    - property_id: 0
+      property_name: PostId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - PostId
+  - type_name: Tag
+    type_id: 8
+    properties:
+    - property_id: 0
+      property_name: TagId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - TagId
+  - type_name: TagClass
+    type_id: 9
+    properties:
+    - property_id: 0
+      property_name: TagClassId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - TagClassId
+  - type_name: University
+    type_id: 10
+    properties:
+    - property_id: 0
+      property_name: UniversityId
+      property_type:
+        primitive_type: DT_SIGNED_INT64
+    primary_keys:
+    - UniversityId
+  edge_types:
+  - type_name: City_isPartOf_Country
+    type_id: 0
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: City
+      destination_vertex: Country
+      relation: MANY_TO_ONE
+  - type_name: Comment_hasCreator_Person
+    type_id: 1
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Comment
+      destination_vertex: Person
+      relation: MANY_TO_ONE
+  - type_name: Comment_hasTag_Tag
+    type_id: 2
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Comment
+      destination_vertex: Tag
+      relation: MANY_TO_MANY
+  - type_name: Comment_isLocatedIn_Country
+    type_id: 3
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Comment
+      destination_vertex: Country
+      relation: MANY_TO_ONE
+  - type_name: Comment_replyOf_Comment
+    type_id: 4
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Comment
+      destination_vertex: Comment
+      relation: MANY_TO_ONE
+  - type_name: Comment_replyOf_Post
+    type_id: 5
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Comment
+      destination_vertex: Post
+      relation: MANY_TO_ONE
+  - type_name: Company_isLocatedIn_Country
+    type_id: 6
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Company
+      destination_vertex: Country
+      relation: MANY_TO_ONE
+  - type_name: Country_isPartOf_Continent
+    type_id: 7
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Country
+      destination_vertex: Continent
+      relation: MANY_TO_ONE
+  - type_name: Forum_containerOf_Post
+    type_id: 8
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Forum
+      destination_vertex: Post
+      relation: MANY_TO_MANY
+  - type_name: Forum_hasMember_Person
+    type_id: 9
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Forum
+      destination_vertex: Person
+      relation: MANY_TO_MANY
+  - type_name: Forum_hasModerator_Person
+    type_id: 10
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Forum
+      destination_vertex: Person
+      relation: MANY_TO_MANY
+  - type_name: Forum_hasTag_Tag
+    type_id: 11
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Forum
+      destination_vertex: Tag
+      relation: MANY_TO_MANY
+  - type_name: Person_hasInterest_Tag
+    type_id: 12
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Person
+      destination_vertex: Tag
+      relation: MANY_TO_MANY
+  - type_name: Person_isLocatedIn_City
+    type_id: 13
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Person
+      destination_vertex: City
+      relation: MANY_TO_ONE
+  - type_name: Person_knows_Person
+    type_id: 14
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Person
+      destination_vertex: Person
+      relation: MANY_TO_MANY
+  - type_name: Person_likes_Comment
+    type_id: 15
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Person
+      destination_vertex: Comment
+      relation: MANY_TO_MANY
+  - type_name: Person_likes_Post
+    type_id: 16
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Person
+      destination_vertex: Post
+      relation: MANY_TO_MANY
+  - type_name: Person_studyAt_University
+    type_id: 17
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Person
+      destination_vertex: University
+      relation: MANY_TO_ONE
+  - type_name: Person_workAt_Company
+    type_id: 18
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Person
+      destination_vertex: Company
+      relation: MANY_TO_MANY
+  - type_name: Post_hasCreator_Person
+    type_id: 19
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Post
+      destination_vertex: Person
+      relation: MANY_TO_ONE
+  - type_name: Post_hasTag_Tag
+    type_id: 20
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Post
+      destination_vertex: Tag
+      relation: MANY_TO_MANY
+  - type_name: Post_isLocatedIn_Country
+    type_id: 21
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Post
+      destination_vertex: Country
+      relation: MANY_TO_ONE
+  - type_name: TagClass_isSubclassOf_TagClass
+    type_id: 22
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: TagClass
+      destination_vertex: TagClass
+      relation: MANY_TO_ONE
+  - type_name: Tag_hasType_TagClass
+    type_id: 23
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: Tag
+      destination_vertex: TagClass
+      relation: MANY_TO_ONE
+  - type_name: University_isLocatedIn_City
+    type_id: 24
+    properties: []
+    vertex_type_pair_relations:
+    - source_vertex: University
+      destination_vertex: City
+      relation: MANY_TO_ONE

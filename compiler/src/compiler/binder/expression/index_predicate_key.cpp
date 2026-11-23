@@ -10,6 +10,7 @@
 #include "neug/compiler/binder/expression/literal_expression.h"
 #include "neug/compiler/binder/expression/property_expression.h"
 #include "neug/compiler/binder/expression/scalar_function_expression.h"
+#include "neug/compiler/common/types/timestamp_t.h"
 #include "neug/compiler/common/serializer/buffered_serializer.h"
 #include "neug/compiler/common/serializer/serializer.h"
 
@@ -138,8 +139,22 @@ std::optional<CanonicalKeyNode> canonicalKeyNode(std::string_view input, size_t 
     std::sort(children.begin(), children.end(), [](const auto& left, const auto& right) {
       return left.key < right.key;
     });
+  // a < b and b > a are the same predicate: order the operands and mirror the
+  // comparison, so `TIMESTAMP('...') < e.ts` matches `e.ts > TIMESTAMP('...')`.
+  std::string op = fields[0];
+  const auto code = [](ExpressionType kind) { return std::to_string(static_cast<uint32_t>(kind)); };
+  if ((is(ExpressionType::GREATER_THAN) || is(ExpressionType::GREATER_THAN_EQUALS) ||
+       is(ExpressionType::LESS_THAN) || is(ExpressionType::LESS_THAN_EQUALS)) &&
+      children[1].key < children[0].key) {
+    std::swap(children[0], children[1]);
+    op = is(ExpressionType::GREATER_THAN) ? code(ExpressionType::LESS_THAN) :
+         is(ExpressionType::LESS_THAN) ? code(ExpressionType::GREATER_THAN) :
+         is(ExpressionType::GREATER_THAN_EQUALS) ? code(ExpressionType::LESS_THAN_EQUALS) :
+                                                   code(ExpressionType::GREATER_THAN_EQUALS);
+  }
   std::string key;
-  for (size_t i = 0; i < childrenBegin; ++i) appendField(key, fields[i]);
+  appendField(key, op);
+  for (size_t i = 1; i < childrenBegin; ++i) appendField(key, fields[i]);
   for (const auto& child : children) appendField(key, child.key);
   return CanonicalKeyNode{std::move(key), fields[1]};
 }
@@ -188,6 +203,27 @@ std::optional<std::string> structuralKey(
   }
   case ExpressionType::FUNCTION: {
     const auto& function = expression.constCast<ScalarFunctionExpression>().getFunction();
+    // TIMESTAMP('<string>') denotes an instant, not a spelling:
+    // '2022-11-29 02:52:22.640' and '2022-11-29 02:52:22.64' are equal. Key
+    // it as the TIMESTAMP literal it evaluates to.
+    if (function.name == "TIMESTAMP" && expression.getNumChildren() == 1 &&
+        expression.getChild(0)->expressionType == ExpressionType::LITERAL) {
+      const auto& literal = expression.getChild(0)->constCast<LiteralExpression>();
+      if (!literal.isNull() &&
+          literal.getValue().getDataType().getLogicalTypeID() == LogicalTypeID::STRING) {
+        try {
+          const auto text = literal.getValue().getValue<std::string>();
+          const auto instant = Timestamp::fromCString(text.c_str(), text.size());
+          std::string canonical;
+          appendField(canonical, std::to_string(static_cast<uint32_t>(ExpressionType::LITERAL)));
+          appendField(canonical, LogicalType::TIMESTAMP().toString());
+          appendField(canonical, literalPayload(LiteralExpression(Value(instant), text)));
+          return canonical;
+        } catch (const std::exception&) {
+          // An unparsable spelling keeps its structural key.
+        }
+      }
+    }
     // These deterministic scalar operations have their complete semantics in
     // their typed arguments/result. The FILL maintenance converter separately
     // verifies that the stored source supports incremental evaluation.

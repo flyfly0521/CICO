@@ -53,26 +53,49 @@ def index_script(workload):
     return '\n'.join(Path(f).read_text().rstrip().rstrip(';') + ';' for f in files)
 
 
-# Semantics-preserving edits of docs queries (implementation/middleware/query_edits,
-# same relative paths).  Each edit is checked against the docs
-# original on the real system (tests/equivalence_check.py); CICO_QUERY_OVERLAY=''
-# disables the overlay.
-OVERLAY = os.environ.get('CICO_QUERY_OVERLAY', str(Path(__file__).resolve().parents[1] / 'query_edits'))
+# Semantics-preserving edits of docs baseline queries are kept in the docs
+# repository next to baseline: <System>/queries/input/<workload>/<file>, with the
+# baseline file name.  A baseline query with an input version is replaced by it.
+# Each edit is checked against the baseline original on the real system
+# (tests/kuzu_query_edit_check.py, tests/equivalence_check.py).
+# CICO_QUERY_INPUT=0 (or the former CICO_QUERY_OVERLAY='') disables them.
+USE_INPUT = (os.environ.get('CICO_QUERY_INPUT', '1') != '0'
+             and os.environ.get('CICO_QUERY_OVERLAY', 'x') != '')
+
+
+def input_dir(system, workload):
+    return DOCS / SYSTEM_DIRS[system] / 'queries' / 'input' / workload
+
+
+def input_file(path):
+    """The input (edited) version of a docs baseline query file, or None."""
+    if not USE_INPUT:
+        return None
+    try:
+        rel = Path(path).resolve().relative_to(DOCS.resolve())
+    except ValueError:
+        return None
+    if len(rel.parts) < 4 or rel.parts[1:3] != ('queries', 'baseline'):
+        return None
+    candidate = DOCS.joinpath(rel.parts[0], 'queries', 'input', *rel.parts[3:])
+    return candidate if candidate.is_file() else None
 
 
 def docs_file(path):
-    """The docs original of a (possibly overlaid) query file."""
-    if OVERLAY and str(path).startswith(OVERLAY):
-        return str(DOCS / Path(path).relative_to(OVERLAY))
+    """The docs baseline original of a (possibly input) query file."""
+    parts = Path(path).parts
+    if 'queries' in parts:
+        i = parts.index('queries')
+        if i + 1 < len(parts) and parts[i + 1] == 'input':
+            return str(Path(*parts[:i + 1], 'baseline', *parts[i + 2:]))
     return str(path)
 
 
 def query_files(workload, system, variant='baseline'):
     root = DOCS / SYSTEM_DIRS[system] / 'queries' / variant / workload
     files = sorted(p for p in root.rglob('*.cypher') if not SKIP.search(p.name))
-    if OVERLAY:
-        files = [Path(OVERLAY) / p.relative_to(DOCS) if (Path(OVERLAY) / p.relative_to(DOCS)).is_file() else p
-                 for p in files]
+    if variant == 'baseline':
+        files = [input_file(p) or p for p in files]
     return [str(p) for p in files]
 
 

@@ -46,7 +46,11 @@ class ScalarFunctionExpression final : public Expression {
     expression_vector childrenCopy;
     childrenCopy.reserve(children.size());
     for (auto& child : children) {
-      childrenCopy.push_back(std::shared_ptr<Expression>(child->copy()));
+      // Graph variables (nodes/relationships) are shared bindings, not
+      // values: a copied expression refers to the same variable.
+      childrenCopy.push_back(child->expressionType == common::ExpressionType::PATTERN
+                                 ? child
+                                 : std::shared_ptr<Expression>(child->copy()));
     }
     auto result = std::make_unique<ScalarFunctionExpression>(
         expressionType, function->copy(),

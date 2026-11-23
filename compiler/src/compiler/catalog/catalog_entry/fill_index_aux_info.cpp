@@ -3022,14 +3022,24 @@ std::string createRelIndexEntry(
       // and the full merged PatternIR's uniqName lookup.
       for (auto var : aggFuncExpr->getRawNameVariables()) {
         // Find which pattern this variable belongs to, then get its node's
-        // uniqName.
-        for (size_t pi = 0; pi < variableNameMaps.size(); ++pi) {
+        // uniqName. A relationship variable (COUNT(edge), SUM(edge.amount))
+        // is recorded as well; otherwise the template can never be matched.
+        bool found = false;
+        for (size_t pi = 0; pi < variableNameMaps.size() && !found; ++pi) {
           auto it = variableNameMaps[pi].find(var);
           if (it != variableNameMaps[pi].end()) {
             // Get the node's uniqName from the graph.
             auto node = graphs[pi]->getQueryNode(it->second);
             info->nodeUniqueNames.push_back(node->getUniqueName());
-            break;
+            found = true;
+          }
+        }
+        for (size_t pi = 0; pi < relVariableNameMaps.size() && !found; ++pi) {
+          auto it = relVariableNameMaps[pi].find(var);
+          if (it != relVariableNameMaps[pi].end()) {
+            auto rel = graphs[pi]->getQueryRel(it->second);
+            info->nodeUniqueNames.push_back(rel->getUniqueName());
+            found = true;
           }
         }
       }
@@ -3082,12 +3092,24 @@ std::string createRelIndexEntry(
       info->columnType = IndexColumnType::REL_COMPUATION_WITH_AGGREGATION;
       info->nameTemplate = scalarExpr->getParsedName();
       for (auto var : scalarExpr->getRawNameVariables()) {
-        for (size_t pi = 0; pi < variableNameMaps.size(); ++pi) {
+        // Each template placeholder names a node or a relationship of the
+        // source pattern; record either, so the rewrite matcher can map every
+        // placeholder (an unrecorded one makes the template unmatchable).
+        bool found = false;
+        for (size_t pi = 0; pi < variableNameMaps.size() && !found; ++pi) {
           auto it = variableNameMaps[pi].find(var);
           if (it != variableNameMaps[pi].end()) {
             auto node = graphs[pi]->getQueryNode(it->second);
             info->nodeUniqueNames.push_back(node->getUniqueName());
-            break;
+            found = true;
+          }
+        }
+        for (size_t pi = 0; pi < relVariableNameMaps.size() && !found; ++pi) {
+          auto it = relVariableNameMaps[pi].find(var);
+          if (it != relVariableNameMaps[pi].end()) {
+            auto rel = graphs[pi]->getQueryRel(it->second);
+            info->nodeUniqueNames.push_back(rel->getUniqueName());
+            found = true;
           }
         }
       }

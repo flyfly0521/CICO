@@ -1,6 +1,7 @@
 #include "neug/generated/proto/plan/expr.pb.h"
 #include "neug/compiler/binder/expression/index_rewrite_template_matcher.h"
 
+#include <cctype>
 #include <optional>
 #include <string>
 #include <vector>
@@ -47,10 +48,19 @@ static std::string normalizeTemplateForComparison(std::string_view s) {
     }
     if (inString) {
       out.push_back(c);
+    } else if (std::isspace(static_cast<unsigned char>(c))) {
+      // Layout is not part of an expression: a template spelled over several
+      // lines (e.g. a multi-line CASE in a FILL source) equals its one-line
+      // form. Collapse whitespace runs; drop them next to ( ) , entirely.
+      if (!out.empty() && out.back() != ' ' && out.back() != '(' && out.back() != ',')
+        out.push_back(' ');
     } else {
+      if ((c == ')' || c == ',' || c == '(') && !out.empty() && out.back() == ' ')
+        out.pop_back();
       out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
     }
   }
+  while (!out.empty() && out.back() == ' ') out.pop_back();
   return out;
 }
 

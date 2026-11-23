@@ -388,11 +388,20 @@ class IndexMiddleware:
         the earlier API; only None and 'neug' are accepted and mean the same."""
         if input_dialect not in (None, 'neug'):
             raise ValueError('FILL sources are NeuG; input_dialect must be None or neug')
+        from .normalize import fold_constants, normalize_temporal_comparisons
         parsed = []
         for statement in fills:
             fill = parse_fill(statement)
             if fill is None:
                 raise ValueError(f'Cannot parse FILL statement: {statement[:120]}')
+            # The same equivalence-preserving normalization as for queries
+            # (_to_internal): canonical temporal literals and literal/property
+            # comparison shape. Matchers that compare spellings (DISTINCT
+            # prefix shapes, templates) then see one form on both sides.
+            source = normalize_temporal_comparisons(fold_constants(fill.source))
+            if source != fill.source:
+                columns = ', '.join(fill.columns)
+                fill = parse_fill(f'FILL {fill.table}({columns}) FROM ({source})') or fill
             parsed.append(fill)
         index_id = index_id or self._default_id(parsed[0])
         texts = [f.text for f in parsed]
@@ -406,8 +415,14 @@ class IndexMiddleware:
         inferred = []
         for fill in parsed:
             inferred += self._infer_carriers(fill, candidate)
+        # The FILL's private group-row state (built with the index, see
+        # materialize.py include_internal_state) is readable by rewrites that
+        # need group presence; expose it in the middleware schema.
+        state_added = False
+        for fill in parsed:
+            state_added |= self._add_row_count_state(fill, candidate)
         previous = self.schema
-        if inferred:
+        if inferred or state_added:
             self._reload(candidate)
         try:
             response = self.engine.register(index_id, [f.text for f in parsed])
@@ -428,6 +443,23 @@ class IndexMiddleware:
             n += 1
             index_id = f'{base}#{n}'
         return index_id
+
+    def _add_row_count_state(self, fill, schema):
+        """Add the FILL's `__neug_fill_state_n_rows_*` columns (INT64, DEFAULT 0)."""
+        try:
+            described = self.engine.request('describe_fill', fill=fill.text)
+        except EngineError:
+            return False
+        kind, _ = schema.table(fill.table)
+        if kind is None:
+            return False
+        added = False
+        for column in described.get('target_columns') or []:
+            if column.startswith('__neug_fill_state_n_rows_') and not schema.has_property(fill.table, column):
+                schema.add_property(fill.table, column, 'INT64')
+                schema.defaults[(fill.table.upper(), column)] = '0'
+                added = True
+        return added
 
     def _infer_carriers(self, fill, schema):
         """Add missing FILL target columns / relationship table to `schema`.
@@ -703,7 +735,11 @@ class IndexMiddleware:
         result = self._cached(key, lambda: self._rewrite_query(cypher, parameter_types))
         retry = result.reason == 'no_index_selected' or result.reason.startswith('engine_error') \
             or 'needs literal' in (result.detail or '')
-        if result.rewritten or not retry or not parameters or not self.specialize:
+        # Some QueryParts rewritten, others not: a FILL built for fixed values
+        # may still apply to the remaining parts once the values are inlined.
+        partial = result.rewritten and bool(
+            re.search(r'part \d+: (no_index_selected|engine_error)', result.detail or ''))
+        if not parameters or not self.specialize or (not partial and (result.rewritten or not retry)):
             return result
         # FILLs are often built for fixed parameter values (time windows,
         # thresholds), and some parameter uses only bind as literals (string
@@ -712,7 +748,10 @@ class IndexMiddleware:
         # for these values, so it is cached by value.
         values = {k: v for k, v in parameters.items() if k in parameter_types}
         key = key + (json.dumps(values, sort_keys=True, default=str),)
-        return self._cached(key, lambda: self._specialize(cypher, parameter_types, values) or result)
+        specialized = self._cached(key, lambda: self._specialize(cypher, parameter_types, values))
+        if specialized is None or (partial and len(specialized.parts or []) <= len(result.parts or [])):
+            return result
+        return specialized
 
     def _cached(self, key, compute):
         if key in self._cache:
@@ -758,7 +797,7 @@ class IndexMiddleware:
         tokens = tokenize(strip_comments(cypher))
         if any(t.kind == 'ident' and t.upper in ('CREATE', 'MERGE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'FOREACH', 'LOAD')
                and (i == 0 or tokens[i - 1].text != '.') for i, t in enumerate(tokens)):
-            return self._fallback(cypher, 'not_read_only')
+            return self._rewrite_write_prefix(cypher, types, inline)
         if self.scope == 'query':
             return self._rewrite(cypher, types, inline)
         # CALL remains opaque to the internal frontend. Compile its read-only
@@ -792,6 +831,39 @@ class IndexMiddleware:
             result.proofs.extend(call_proofs + proofs)
             routes = (['subqueries'] if call_text else []) + (['expressions'] if scalar_text else [])
             result.route = ':'.join(routes + ([result.route] if result.route else []))
+        if not result.rewritten and len(queryparts.split_parts(strip_comments(cypher)) or []) > 1:
+            # A staged FILL (WITH DISTINCT ... WITH DISTINCT ... aggregate) is a
+            # prefix of several QueryParts; no single part can match it. When
+            # no part was rewritten, offer RewriterV4 the whole statement (the
+            # same verification guard applies).
+            whole = self._rewrite(cypher, types, inline)
+            if whole.rewritten:
+                whole.route = ':'.join(filter(None, ['whole_query', whole.route]))
+                return whole
+        return result
+
+    def _rewrite_write_prefix(self, cypher, types, inline=None):
+        """MATCH ... WITH ... SET: rewrite the read QueryParts in front of the
+        write and keep the write QueryPart unchanged (queryparts.split_write_prefix)."""
+        split = queryparts.split_write_prefix(strip_comments(cypher))
+        if split is None:
+            return self._fallback(cypher, 'not_read_only')
+        prefix, tail, outputs = split
+        probe_return = 'RETURN ' + ', '.join(outputs)
+        result = self._rewrite_query(f'{prefix} {probe_return}', types, inline)
+        note = 'write statement: read prefix'
+        if not result.rewritten:
+            return self._fallback(cypher, result.reason or 'not_read_only',
+                                  f'{note} {result.detail}'.strip())
+        parts = queryparts.split_parts(strip_comments(result.cypher))
+        squash = lambda text: re.sub(r'\s+', ' ', text).strip()  # noqa: E731
+        if not parts or squash(parts[-1]) != squash(probe_return):
+            return self._fallback(cypher, 'write_prefix_splice_failed',
+                                  f'{note}: rewritten prefix changed its final projection')
+        result.cypher = ' '.join(parts[:-1]) + '\n' + tail
+        result.original = cypher
+        result.route = ':'.join(filter(None, ['write_prefix', result.route]))
+        result.detail = ' | '.join(filter(None, [note + ' rewritten; write part unchanged', result.detail]))
         return result
 
     def _bind_prefix(self, source, types, inline=None):
@@ -814,6 +886,7 @@ class IndexMiddleware:
         if parts is None or len(parts) == 1:
             return self._rewrite(cypher, types, inline)
         new, notes, indexes, rewritten, results, proofs = list(parts), [], set(), [], [], []
+        premises = set()
         for i, part in enumerate(parts):
             if not queryparts.has_match(part):
                 continue
@@ -831,6 +904,8 @@ class IndexMiddleware:
                 continue
             new[i] = result.part_text
             indexes.update(result.indexes)
+            premises.update(result.premises)
+            proofs.extend(result.proofs)
             rewritten.append(i + 1)
         if not rewritten:
             best = min(results, key=self._rank) if results else None
@@ -839,7 +914,7 @@ class IndexMiddleware:
         text = ' '.join(new)
         return Result('query', cypher=text, original=cypher, rewritten=True, reason='rewritten',
                       detail=' | '.join(notes), indexes=sorted(indexes), parts=rewritten,
-                      route='parts:' + ','.join(map(str, rewritten)), proofs=proofs)
+                      route='parts:' + ','.join(map(str, rewritten)), proofs=proofs, premises=sorted(premises))
 
     def _rank(self, result):
         reason = result.reason.split(':')[0]
@@ -966,23 +1041,32 @@ class IndexMiddleware:
         common = dict(columns=response.get('columns', []))
         if not response.get('read_only'):
             return self._fallback(cypher, 'not_read_only', **common)
-        if not response.get('changed'):
-            return self._fallback(cypher, 'no_index_selected', **common)
-        used = self._carriers_read(response['ir'])
-        common.update(indexes=used, route=response.get('route', ''))
+        if response.get('changed'):
+            selected = response['ir']
+            used = self._carriers_read(selected)
+            common.update(indexes=used, route=response.get('route', ''))
+        else:
+            from .rel_projections import rewrite as rewrite_rel_projections
+            projection = rewrite_rel_projections(self, internal, types)
+            if projection is None:
+                return self._fallback(cypher, 'no_index_selected', **common)
+            selected, used, premise = projection
+            common.update(indexes=used, route='rel_projections', premises=[premise],
+                          proofs=[dict(rule='rel_projections', indexes=used, checks=[
+                              'total_directed_scan', 'ordered_primary_keys', 'exact_scalar_expression'])])
         if not used:
             # RewriterV4 also normalises statements; without an index read a
             # re-printed query has no benefit, so keep the user's text.
             return self._fallback(cypher, 'no_index_selected', 'statement changed without reading an index',
                                   **common)
         try:
-            printed = self.printer.print(response['ir'])
+            printed = self.printer.print(selected)
         except Unsupported as error:
             return self._fallback(cypher, 'unsupported', str(error), **common)
         except (KeyError, TypeError, IndexError) as error:
             return self._fallback(cypher, 'printer_error', repr(error), **common)
         if self.verify:
-            problem = self._verify(printed, response['ir'], types, response.get('columns'))
+            problem = self._verify(printed, selected, types, response.get('columns'))
             if problem:
                 return self._fallback(cypher, problem[0], f'{problem[1]} | printed: {printed.cypher}', **common)
         result = Result('query', cypher=printed.cypher, original=cypher, rewritten=True, reason='rewritten', **common)

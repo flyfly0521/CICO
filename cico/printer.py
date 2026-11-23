@@ -110,6 +110,7 @@ class Printer:
         if statement.get('pre_parts') or statement.get('pre_expressions') or statement.get('post_query'):
             raise Unsupported('pre/post query parts')
         self.names = self._assign_names(statement)
+        self.statement = statement
         tables = {}
 
         def collect(value):
@@ -151,6 +152,7 @@ class Printer:
         return ' '.join(self.part_texts)
 
     def _part(self, part, last):
+        self.in_last_part = last   # dialects may print the final projection differently
         if part.get('updating'):
             raise Unsupported('updating clauses')
         out = [self._clause(c) for c in part.get('reading') or []]
@@ -216,8 +218,20 @@ class Printer:
         if recursive.get('unsupported') or not (kind == WALK and recursive.get('semantic', 0) == 0
                                                  or kind in (SHORTEST, ALL_SHORTEST) and not recursive.get('weighted')):
             raise Unsupported('non-walk recursive relationship')
-        if recursive.get('node_predicate') or recursive.get('rel_predicate') or recursive.get('weighted'):
-            raise Unsupported('recursive relationship with predicates')
+        predicates = [recursive.get('rel_predicate'), recursive.get('node_predicate')]
+        if any(predicates):
+            # `*l..u (r, n | WHERE <rel predicate> AND <node predicate>)` over the
+            # recursive pattern's own relationship and node variables.
+            inner_rel, inner_node = recursive.get('inner_rel'), recursive.get('inner_node')
+            if kind != WALK or recursive.get('weighted') or not inner_rel or not inner_node \
+                    or inner_rel['uid'] not in self.names or inner_node['uid'] not in self.names:
+                raise Unsupported('recursive relationship with predicates')
+            inner = (f"({self.dialect.ident(self.names[inner_rel['uid']])}, "
+                     f"{self.dialect.ident(self.names[inner_node['uid']])} | WHERE "
+                     + ' AND '.join(self.expr(p) for p in predicates if p) + ')')
+            return f"[{name}{types}{self.dialect.var_length(recursive['lower'], recursive['upper'])} {inner}]"
+        if recursive.get('weighted'):
+            raise Unsupported('weighted recursive relationship')
         if kind != WALK:
             return f"[{name}{types}{self.dialect.shortest_length(kind == ALL_SHORTEST, recursive['lower'], recursive['upper'])}]"
         return f"[{name}{types}{self.dialect.var_length(recursive['lower'], recursive['upper'])}]"

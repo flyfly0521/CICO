@@ -47,7 +47,7 @@ class ConstraintTests(unittest.TestCase):
     def test_every_declared_constraint_has_a_violation_count(self):
         with IndexMiddleware(ROOT / 'schemas/ldbc-bi.yaml', profile=neo4j_profile()) as mw:
             checks = mw.constraint_checks()
-        self.assertEqual(len(checks), 12)
+        self.assertEqual(len(checks), 13)
         for check in checks:
             self.assertIn('AS violations', check['cypher'])
         self.assertIn('MATCH (n:`Message`)-[r:`REPLY_OF`]->()', checks[0]['cypher'])

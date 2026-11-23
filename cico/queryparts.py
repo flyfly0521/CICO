@@ -79,6 +79,48 @@ def split_parts(text):
     return parts
 
 
+WRITE_CLAUSES = {'CREATE', 'MERGE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'FOREACH'}
+
+
+def split_write_prefix(text):
+    """Write statement -> (read prefix, write tail, outputs of the prefix's
+    last WITH), or None.
+
+    The prefix ends with the last top-level WITH before the first write
+    clause; every QueryPart before that point only reads.  The write tail is
+    the QueryPart holding the write (it may read again, e.g. MATCH ... SET).
+    Theorem 1 holds for every input binding, so rewriting the read QueryParts
+    of the prefix preserves the bag of rows handed to the write tail, and the
+    unchanged tail performs the same writes.  (A write whose effect depends
+    on the unspecified order of its input rows has no defined result to
+    preserve in the first place.)"""
+    tokenize, render = _tok()
+    tokens = tokenize(text.strip().rstrip(';'))
+    if not tokens:
+        return None
+    clauses = _top_level(tokens)
+    if not clauses or clauses[0][0] != 0:
+        return None
+    words = [w for _, w in clauses]
+    if 'UNION' in words or 'LOAD' in words or 'CALL' in words:
+        return None
+    first_write = next((k for k, w in enumerate(words) if w in WRITE_CLAUSES), None)
+    if first_write is None:
+        return None
+    last_with = next((k for k in range(first_write - 1, -1, -1) if words[k] == 'WITH'), None)
+    if last_with is None or last_with + 1 >= len(clauses):
+        return None
+    if any(w in WRITE_CLAUSES for w in words[:last_with]):
+        return None
+    with_start, end = clauses[last_with][0], clauses[last_with + 1][0]
+    if with_start + 1 < len(tokens) and tokens[with_start + 1].text == '*':
+        return None
+    outputs = projection_outputs(render(tokens[with_start:end]))
+    if not outputs:
+        return None
+    return render(tokens[:end]), render(tokens[end:]), outputs
+
+
 def has_match(part):
     tokenize, _ = _tok()
     return any(w == 'MATCH' or w == 'OPTIONAL' for _, w in _top_level(tokenize(part)))

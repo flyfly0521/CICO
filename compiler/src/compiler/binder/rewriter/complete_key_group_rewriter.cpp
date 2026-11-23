@@ -1,5 +1,6 @@
 #include "neug/compiler/binder/rewriter/complete_key_group_rewriter.h"
 
+#include "glog/logging.h"
 #include <algorithm>
 #include <functional>
 #include <optional>
@@ -88,6 +89,44 @@ bool distinctCount(const std::shared_ptr<Expression>& expression) {
       aggregate.getNumChildren() != 1) return false;
   const auto type = aggregate.getChild(0)->expressionType;
   return type == ExpressionType::PATTERN || type == ExpressionType::PROPERTY;
+}
+
+// A complete key group (theory.md, Definition 6 with Ext = the group itself):
+// when the query group is exactly one materialized source group, the stored
+// value is the whole group's aggregate, whatever its algebra. COUNT(DISTINCT),
+// MIN and MAX are therefore read as stored (lowered with MAX over the
+// duplicated rows of one group), and so is a scalar finalizer over them.
+bool completeGroupAggregate(const std::shared_ptr<Expression>& expression) {
+  if (distinctCount(expression)) return true;
+  if (expression->expressionType != ExpressionType::AGGREGATE_FUNCTION) return false;
+  const auto& aggregate = expression->constCast<AggregateFunctionExpression>();
+  const auto& name = aggregate.getFunction().name;
+  // SUM and COUNT of one complete group are its stored values as well (a FILL
+  // with MIN/MAX columns admits only complete-group reads for all columns).
+  if (!aggregate.isDistinct() && name == "COUNT_STAR" && aggregate.getNumChildren() == 0)
+    return true;
+  return !aggregate.isDistinct() && aggregate.getNumChildren() == 1 &&
+      (name == "MIN" || name == "MAX" || name == "SUM" || name == "COUNT");
+}
+
+bool collectCompleteGroupAggregates(const std::shared_ptr<Expression>& expression,
+                                    std::vector<std::shared_ptr<Expression>>& out) {
+  if (!expression) return true;
+  if (expression->expressionType == ExpressionType::AGGREGATE_FUNCTION) {
+    if (!completeGroupAggregate(expression)) return false;
+    out.push_back(expression);
+    return true;
+  }
+  if (expression->expressionType == ExpressionType::SUBQUERY) return false;
+  for (const auto& child : ExpressionChildrenCollector::collectChildren(*expression))
+    if (!collectCompleteGroupAggregates(child, out)) return false;
+  return true;
+}
+
+// A complete-group aggregate value, or a deterministic scalar over such values.
+bool completeGroupValue(const std::shared_ptr<Expression>& expression) {
+  std::vector<std::shared_ptr<Expression>> aggregates;
+  return collectCompleteGroupAggregates(expression, aggregates) && !aggregates.empty();
 }
 }  // namespace
 
@@ -385,7 +424,8 @@ bool completeKeyGroupInputsAreClosed(
       static const std::set<std::string> deterministic = {
           "+", "-", "*", "/", "%", "LABEL", "STRUCT_EXTRACT", "TIMESTAMP",
           "CAST_TO_INT64", "CAST_TO_DOUBLE", "CAST_TO_STRING", "CAST_TO_DATE",
-          "CAST_TO_TIMESTAMP"};
+          "CAST_TO_TIMESTAMP", "CAST_TO_FLOAT", "ROUND", "ABS", "FLOOR", "CEIL",
+          "CEILING", "SIGN"};
       if (!deterministic.contains(expression->template constCast<ScalarFunctionExpression>()
                                       .getFunction().name)) return false;
       break;
@@ -465,14 +505,22 @@ bool provesCompleteKeyGroupDistinctCounts(
   // <window/tag> WITH p, count(DISTINCT m)). Duplicated anchor rows see the
   // same value set, so the caller lowers it with MAX rather than SUM.
   const bool nodeFill = info.getFillType() == FillEntryType::NODE;
-  if ((!nodeFill && (info.getFillType() != FillEntryType::REL ||
-                     !info.getTableUniqName().empty() || info.isFillUndirectedRel())) ||
+  // A property carrier on an existing relationship (e.g. KNOWS(bi20_direct))
+  // stores the group value on every carrier edge of the key pair. A complete
+  // group read sees that one value on all its rows; under MATCH the caller
+  // adds the group-presence test (rewriter_v4.cpp, REL presence predicate).
+  const bool edgeCarrier = !nodeFill && info.getFillType() == FillEntryType::REL &&
+      !info.getTableUniqName().empty();
+  if (edgeCarrier && match.getMatchClauseType() != MatchClauseType::MATCH) return false;
+  if ((!nodeFill && (info.getFillType() != FillEntryType::REL || info.isFillUndirectedRel())) ||
       info.getSourceQuery().empty() || !part.hasProjectionBody() ||
       (match.getMatchClauseType() != MatchClauseType::MATCH &&
        match.getMatchClauseType() != MatchClauseType::OPTIONAL_MATCH))
     return false;
-  auto* carrier = context.getCatalog()->getTableCatalogEntry(
-      context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry());
+  auto* carrier =
+      // A FILL may target a REL group, which is not a table entry (lookup throws).
+      context.getCatalog()->containsTable(context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry()) ?
+      context.getCatalog()->getTableCatalogEntry(context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry()) : nullptr;
   if (carrier == nullptr || carrier->getType() != (nodeFill ? CatalogEntryType::NODE_TABLE_ENTRY
                                                             : CatalogEntryType::REL_TABLE_ENTRY))
     return false;
@@ -480,13 +528,22 @@ bool provesCompleteKeyGroupDistinctCounts(
     return false;
   // Recursive positions are verified against the rebound source below.
   std::vector<std::pair<size_t, RecursiveEdgeContract>> recursiveEdges;
+  size_t carrierEdges = 0;
   for (size_t i = 0; i < matched.relsInfo.size(); ++i) {
     const auto& rel = matched.relsInfo[i];
-    if (rel.matchedIdx >= query.relsInfo.size() ||
-        (!nodeFill && std::find(rel.relLabels.begin(), rel.relLabels.end(), carrier->getTableID()) !=
-            rel.relLabels.end())) return false;
+    const bool carrierLabel = !nodeFill &&
+        std::find(rel.relLabels.begin(), rel.relLabels.end(), carrier->getTableID()) != rel.relLabels.end();
+    if (rel.matchedIdx >= query.relsInfo.size()) return false;
+    if (carrierLabel) {
+      // Only the single non-recursive carrier edge of an edge-carrier FILL.
+      if (!edgeCarrier || rel.relLabels.size() != 1 ||
+          rel.relType != QueryRelType::NON_RECURSIVE || ++carrierEdges > 1) return false;
+      continue;
+    }
     if (rel.relType == QueryRelType::NON_RECURSIVE) continue;
-    if (!nodeFill || query.relsInfo[rel.matchedIdx].relType != rel.relType) return false;
+    // Recursive positions of NODE and REL FILLs are both checked against the
+    // rebound source contract below (bounds, semantics and predicates).
+    if (query.relsInfo[rel.matchedIdx].relType != rel.relType) return false;
     const auto& name = query.relsInfo[rel.matchedIdx].uniqName;
     const auto edges = match.getQueryGraphCollection()->getQueryRels();
     const auto actual = std::find_if(edges.begin(), edges.end(),
@@ -510,7 +567,7 @@ bool provesCompleteKeyGroupDistinctCounts(
       return false;
     keys.insert(query.nodesInfo[matched.nodesInfo[position->second].matchedIdx].uniqName);
   }
-  if (keys.size() != keyNames.size()) return false;
+  if (keys.size() != keyNames.size() || (edgeCarrier && carrierEdges != 1)) return false;
   std::set<std::string> groupedKeys;
   for (const auto& group : part.getProjectionBody()->getGroupByExpressions()) {
     const auto name = identity(group);
@@ -519,8 +576,21 @@ bool provesCompleteKeyGroupDistinctCounts(
   if (groupedKeys != keys) return false;
   const auto aggregates = part.getProjectionBody()->getAggregateExpressions();
   if (aggregates.empty()) return false;
+  // Projected scalars over the aggregates that match a stored finalizer
+  // column; the whole scalar is replaced by that column.
+  std::vector<const Expression*> finalizers;
   for (const auto& aggregate : aggregates) {
-    if (!distinctCount(aggregate)) return false;
+    if (!completeGroupAggregate(aggregate)) return false;
+    // MIN/MAX/SUM of an empty OPTIONAL group is NULL (COUNT is 0) rather than
+    // a stored default. A NODE FILL with a row count gets the OPTIONAL guard
+    // CASE WHEN <rows> > 0 THEN value ELSE NULL/0 (rewriter_v4.cpp); without
+    // one only COUNT(DISTINCT) is safe.
+    if (!distinctCount(aggregate) && match.getMatchClauseType() != MatchClauseType::MATCH &&
+        !(nodeFill && !info.getRowCountColumn().empty()))
+      return false;
+    if (match.getMatchClauseType() == MatchClauseType::OPTIONAL_MATCH &&
+        aggregate->constCast<AggregateFunctionExpression>().getNumChildren() == 0)
+      return false;   // COUNT(*) counts the padded row
     if (match.getMatchClauseType() == MatchClauseType::OPTIONAL_MATCH) {
       // A prebound endpoint can remain non-NULL when OPTIONAL has no match.
       // Only a removed witness is guaranteed to contribute zero on that row.
@@ -539,8 +609,30 @@ bool provesCompleteKeyGroupDistinctCounts(
     }
     IndexRewriteTemplateMatcher::AggRewriteTargetMap targets;
     if (!IndexRewriteTemplateMatcher::validateAggregateTemplatesForIndexRewrite(
-            aggregate, info, query, matched, targets) || targets.size() != 1)
-      return false;
+            aggregate, info, query, matched, targets) || targets.size() != 1) {
+      // A stored finalizer (e.g. min(...) + 1): the projected scalar holding
+      // this aggregate must match a computation-with-aggregate column.
+      targets.clear();
+      bool finalizer = false;
+      for (const auto& projected : part.getProjectionBody()->getProjectionExpressions()) {
+        if (projected == nullptr || projected->expressionType == ExpressionType::AGGREGATE_FUNCTION)
+          continue;
+        std::vector<std::shared_ptr<Expression>> inner;
+        if (!collectCompleteGroupAggregates(projected, inner) ||
+            std::find(inner.begin(), inner.end(), aggregate) == inner.end()) continue;
+        auto* scalar = projected->ptrCast<ScalarFunctionExpression>();
+        if (scalar == nullptr ||
+            !IndexRewriteTemplateMatcher::validateTemplatesForIndexRewrite(
+                scalar, info, query, matched, targets) || targets.size() != 1) {
+          targets.clear();
+          continue;
+        }
+        finalizer = true;
+        finalizers.push_back(projected.get());
+        break;
+      }
+      if (!finalizer) return false;
+    }
     const auto position = targets.begin()->second;
     if (position >= info.getTargetColumns().size() ||
         info.getTargetColumns()[position].starts_with(InternalKeyword::FILL_AGGREGATE_STATE_PREFIX) ||
@@ -552,6 +644,7 @@ bool provesCompleteKeyGroupDistinctCounts(
   // the complete aggregates proved above may hide their original arguments.
   auto covered = incomingExpressions;
   for (const auto& aggregate : aggregates) covered.insert(aggregate.get());
+  covered.insert(finalizers.begin(), finalizers.end());
   // The per-pair default retains both ordered endpoints; a NODE group keeps
   // exactly its anchor identity and removes every other source binding.
   const std::unordered_set<std::string> retainedKeys(keys.begin(), keys.end());
@@ -647,7 +740,7 @@ bool provesCompleteKeyGroupDistinctCounts(
     }
     if (sourceGroups != sourceKeys) return false;
     for (size_t i = keyCount; i < values.size(); ++i)
-      if (!distinctCount(values[i])) return false;
+      if (!completeGroupValue(values[i])) return false;
     return true;
   } catch (const std::exception&) {
     return false;

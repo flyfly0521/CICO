@@ -155,7 +155,7 @@ def main(argv=None):
                 print(f'-- {result.reason} {result.indexes} {result.detail[:300]}'.rstrip(), file=sys.stderr)
         elif args.command == 'build':
             built = (registry.last_report['plans'] if registry else
-                     mw.build_statements(include_internal_state=args.index_script_dialect == 'neug'))
+                     mw.build_statements(include_internal_state=True))  # private FILL state, as the registry builds it
             if args.json:
                 print(json.dumps(built, indent=2, ensure_ascii=False))
             else:

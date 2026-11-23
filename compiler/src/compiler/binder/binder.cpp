@@ -247,6 +247,12 @@ bool Binder::reservedInColumnName(const std::string& name) {
 
 bool Binder::reservedInPropertyLookup(const std::string& name) {
   auto normalizedName = StringUtils::getUpper(name);
+  // A FILL group's row count (n_rows) is readable like a public COUNT(*)
+  // column: index rewrites read it as the group-presence test. Other private
+  // aggregate state (e.g. the SUM behind an AVG finalizer) stays reserved.
+  if (normalizedName.starts_with(StringUtils::getUpper(
+          std::string(InternalKeyword::FILL_ROW_COUNT_STATE_PREFIX))))
+    return false;
   return normalizedName.starts_with(StringUtils::getUpper(
              std::string(InternalKeyword::FILL_AGGREGATE_STATE_PREFIX))) ||
          ReservedNames::getPropertyLookupName().contains(normalizedName);

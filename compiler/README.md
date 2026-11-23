@@ -32,6 +32,6 @@
 - 日常开发直接修改这里的源码。
 - 需要合并上游 NeuG 的新改动时：先把本地修改整理成补丁放入 `upstream/patches/` 并加入 `series`，然后运行
   `python3 tools/sync_compiler.py --neug-source /path/to/IncGQ --clean`（需要一个已构建的 NeuG）。工具重新复制源码和头文件闭包、按顺序应用补丁（上下文不匹配即失败），并更新 `provenance.json`；上游新增的编译器源文件需先加入 `sources.txt`。
-- 当前代码来自 IncGQ `develop` 提交 `c88ca1f1` 及其工作区改动（与当时引擎链接的 `libneug.so` 一致），并应用了 `upstream/patches/` 中的四个补丁。
+- 当前代码来自 IncGQ `develop` 提交 `c88ca1f1` 及其工作区改动（与当时引擎链接的 `libneug.so` 一致），并应用了 `upstream/patches/` 中的补丁（见 `series`；最后一个 `cico-kuzu-input-rewrites.patch` 是 CICO 自身的开发，说明见 [docs/notes/kuzu-input-rewrites.md](../docs/notes/kuzu-input-rewrites.md)）。
 
 许可：Apache-2.0（`LICENSE`）；该编译器的部分代码源自 Kùzu（MIT）。

@@ -10,6 +10,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include <bit>
 #include <set>
 #include <string>
 
@@ -182,6 +183,9 @@ class BoundIR {
         put(r, "semantic", V(uint64_t(info->bindData->semantic)));
         put(r, "node_predicate", expr(info->nodePredicate.get()));
         put(r, "rel_predicate", expr(info->relPredicate.get()));
+        // The variables the predicates are written over: `*l..u (r, n | WHERE ...)`.
+        if (info->rel != nullptr) put(r, "inner_rel", entity(*info->rel));
+        if (info->node != nullptr) put(r, "inner_node", entity(*info->node));
         put(r, "weighted", V(info->bindData->weightPropertyExpr != nullptr));
       }
       put(o, "recursive", std::move(r));
@@ -239,7 +243,18 @@ class BoundIR {
       put(o, "owner_raw", p->getRawVariableName());
       put(o, "property", p->getPropertyName());
     } else if (auto* l = dynamic_cast<const LiteralExpression*>(e)) {
-      put(o, "value", value(l->getValue()));
+      const auto& literal = l->getValue();
+      put(o, "value", value(literal));
+      // The printable text can round floating values. Keep the exact bits
+      // available to rewrite rules that compare independently bound literals.
+      if (!literal.isNull()) {
+        const auto id = literal.getDataType().getLogicalTypeID();
+        if (id == ::neug::common::LogicalTypeID::DOUBLE) {
+          put(o, "literal_bits", V(std::bit_cast<uint64_t>(literal.getValue<double>())));
+        } else if (id == ::neug::common::LogicalTypeID::FLOAT) {
+          put(o, "literal_bits", V(std::bit_cast<uint32_t>(literal.getValue<float>())));
+        }
+      }
     } else if (auto* p = dynamic_cast<const ParameterExpression*>(e)) {
       put(o, "name", p->getName());
     } else if (auto* v = dynamic_cast<const VariableExpression*>(e)) {

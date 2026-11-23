@@ -69,16 +69,17 @@ class CaseExpression final : public Expression {
   }
 
   std::unique_ptr<Expression> copy() const override {
-    auto elseCopy = elseExpression ? std::shared_ptr<Expression>(elseExpression->copy())
-                                   : nullptr;
+    // Graph variables (nodes/relationships) are shared bindings, not values.
+    const auto copyChild = [](const std::shared_ptr<Expression>& e) -> std::shared_ptr<Expression> {
+      if (!e) return nullptr;
+      if (e->expressionType == common::ExpressionType::PATTERN) return e;
+      return std::shared_ptr<Expression>(e->copy());
+    };
+    auto elseCopy = copyChild(elseExpression);
     auto result = std::make_unique<CaseExpression>(dataType.copy(), std::move(elseCopy), uniqueName);
     for (auto& alt : caseAlternatives) {
-      auto whenCopy = alt->whenExpression
-                          ? std::shared_ptr<Expression>(alt->whenExpression->copy())
-                          : nullptr;
-      auto thenCopy = alt->thenExpression
-                          ? std::shared_ptr<Expression>(alt->thenExpression->copy())
-                          : nullptr;
+      auto whenCopy = copyChild(alt->whenExpression);
+      auto thenCopy = copyChild(alt->thenExpression);
       result->addCaseAlternative(std::move(whenCopy), std::move(thenCopy));
     }
     result->alias = alias;

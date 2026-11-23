@@ -1,4 +1,4 @@
-"""Semantic check of Kuzu query edits (implementation/middleware/query_edits).
+"""Semantic check of Kuzu query edits (docs Kuzu/queries/input/ldbc-bi).
 
 For every edited Kuzu BI query and parameter sample, run the docs original and
 the edited text on a Kuzu store (read-only, no index involved) and compare the
@@ -27,6 +27,12 @@ PREMISES = {
     'bi-6': {'every message has at most one creator':
              'MATCH (m:POST:COMMENT)-[r:HASCREATOR]->() WITH m, count(r) AS c WHERE c > 1 '
              'RETURN count(m) AS violations'},
+    'bi-12': {'every message replies to at most one message':
+              'MATCH (m:POST:COMMENT)-[r:REPLYOF]->() WITH m, count(r) AS c WHERE c > 1 '
+              'RETURN count(m) AS violations',
+              'every message has at most one REPLYOF*0.. path to a POST':
+              'MATCH (m:POST:COMMENT)-[:REPLYOF*0..]->(p:POST) WITH m, count(*) AS c WHERE c > 1 '
+              'RETURN count(m) AS violations'},
 }
 
 
@@ -46,10 +52,11 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--queries', nargs='*')
     parser.add_argument('--samples', type=int, default=1)
+    parser.add_argument('--buffer-pool-gb', type=int, default=16)
     parser.add_argument('--threads', type=int, default=8)
     args = parser.parse_args()
     import kuzu
-    db = kuzu.Database(args.store, buffer_pool_size=16 << 30, read_only=True)
+    db = kuzu.Database(args.store, buffer_pool_size=args.buffer_pool_gb << 30, read_only=True)
     conn = kuzu.Connection(db, num_threads=args.threads)
 
     def run(text, params):
@@ -59,7 +66,7 @@ def main():
             rows.append(result.get_next())
         result.close()
         return rows
-    overlay = Path(W.OVERLAY) / 'Kuzu/queries/baseline/ldbc-bi'
+    overlay = W.input_dir('kuzu', 'ldbc-bi')
     report = {'store': args.store, 'overlay': str(overlay), 'indexes_used': False, 'checks': [], 'premises': {}}
     for edited in sorted(overlay.glob('bi-*.cypher')):
         name = edited.stem

@@ -84,8 +84,10 @@ std::vector<DeclaredRelationshipMultiplicity> declarationsFor(table_id_t anchorT
     if (info == nullptr || info->getFillType() != catalog::FillEntryType::NODE ||
         info->getSourceQuery().empty())
       continue;
-    const auto* table = catalog->getTableCatalogEntry(context.getTransaction(), info->getTableName(),
-                                                      context.useInternalCatalogEntry());
+    const auto* table =
+      // A FILL may target a REL group, which is not a table entry (lookup throws).
+      catalog->containsTable(context.getTransaction(), info->getTableName(), context.useInternalCatalogEntry()) ?
+      catalog->getTableCatalogEntry(context.getTransaction(), info->getTableName(), context.useInternalCatalogEntry()) : nullptr;
     if (table == nullptr || table->getTableID() != anchorTable) continue;
     if (auto parsed = catalog::parseFillRelationshipDeclarations(info->getSourceQuery(), context))
       for (auto& declared : *parsed) result.push_back(std::move(declared));

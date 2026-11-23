@@ -34,6 +34,7 @@ Kinds
   at_least_one     every `from` node has at least one outgoing `rel`
                    (or: every `to` node has at least one incoming `rel`)
   endpoint_labels  every `rel` leaving a `from` node ends at a `to` node
+  unique_edge      at most one relationship per ordered endpoint pair
   unique_property  no two `label` nodes share a non-null `property` value
   required_property  every `label` node has a non-null `property`
 """
@@ -43,7 +44,7 @@ from pathlib import Path
 
 import yaml
 
-KINDS = {'at_most_one', 'at_least_one', 'endpoint_labels', 'unique_property', 'required_property'}
+KINDS = {'at_most_one', 'at_least_one', 'endpoint_labels', 'unique_edge', 'unique_property', 'required_property'}
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,8 @@ class Constraint:
                     else f'{self.kind}: -[:{self.rel}]->(:{self.dst})')
         if self.kind == 'endpoint_labels':
             return f'endpoint_labels: (:{self.src})-[:{self.rel}]->(:{self.dst})'
+        if self.kind == 'unique_edge':
+            return f'unique_edge: -[:{self.rel}]-> per ordered pair'
         return f'{self.kind}: {self.label}.{self.prop}'
 
     def check(self):
@@ -80,6 +83,9 @@ class Constraint:
         if self.kind == 'endpoint_labels':
             return (f'MATCH (:`{self.src}`)-[r:`{self.rel}`]->(x) WHERE NOT x:`{self.dst}` '
                     f'RETURN count(r) AS violations')
+        if self.kind == 'unique_edge':
+            return (f'MATCH (a)-[r:`{self.rel}`]->(b) WITH a, b, count(r) AS c '
+                    'WHERE c > 1 RETURN count(*) AS violations')
         if self.kind == 'required_property':
             return f'MATCH (n:`{self.label}`) WHERE n.`{self.prop}` IS NULL RETURN count(n) AS violations'
         return (f'MATCH (n:`{self.label}`) WHERE n.`{self.prop}` IS NOT NULL '
@@ -102,6 +108,8 @@ class Constraints:
                 raise ValueError(f'{kind} needs exactly one of from/to: {entry}')
             if kind == 'endpoint_labels' and not (item.rel and item.src and item.dst):
                 raise ValueError(f'endpoint_labels needs rel, from and to: {entry}')
+            if kind == 'unique_edge' and not item.rel:
+                raise ValueError(f'{kind} needs rel: {entry}')
             if kind in ('unique_property', 'required_property') and not (item.label and item.prop):
                 raise ValueError(f'{kind} needs label and property: {entry}')
             self.items.append(item)
@@ -188,6 +196,8 @@ class Constraints:
                         f'WHERE c > 1 RETURN count(n) AS violations')
             plain = f'(n)-[:{c.rel}]->()' if c.src else f'()-[:{c.rel}]->(n)'
             return f'MATCH {node}{where(pred, "NOT EXISTS { MATCH " + plain + " }")} RETURN count(n) AS violations'
+        if c.kind == 'unique_edge':
+            return c.check()
         if c.kind == 'endpoint_labels':
             node, pred = self._node('n', c.src)
             return (f'MATCH {node}-[r:{c.rel}]->(x){where(pred, "NOT " + self._member("x", c.dst))} '

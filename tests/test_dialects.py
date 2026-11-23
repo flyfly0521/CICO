@@ -48,7 +48,8 @@ class Declarations(unittest.TestCase):
         self.assertEqual(neo4j.rules, frozenset({'scalar_regions', 'edge_carriers', 'constraint_retry',
                                                  'path_carriers', 'distinct_partitions'}))
         with IndexMiddleware(SCHEMA, dialect='kuzu', constraints=SHARED) as mw:
-            self.assertEqual(mw.profile.rules, frozenset({'scalar_regions', 'edge_carriers', 'constraint_retry'}))
+            self.assertEqual(mw.profile.rules, frozenset({'scalar_regions', 'edge_carriers',
+                                                          'rel_projections', 'constraint_retry'}))
             status = mw.profile.rule_status()
             self.assertIn('isomorphism', status['path_carriers'])        # not needed under homomorphism
             self.assertIn('missing hooks', status['distinct_partitions'])
@@ -90,15 +91,15 @@ class Declarations(unittest.TestCase):
 
 
 class SharedConstraints(unittest.TestCase):
-    def test_neo4j_translation_equals_the_legacy_inline_list(self):
+    def test_neo4j_translation_preserves_the_legacy_inline_list(self):
         mapping = load_mapping(ROOT / 'profiles/ldbc-snb-neo4j.yaml')
-        self.assertEqual(mapping['constraints'], LEGACY_NEO4J)
+        self.assertEqual(mapping['constraints'], LEGACY_NEO4J + [{'kind': 'unique_edge', 'rel': 'KNOWS'}])
         self.assertEqual(mapping['acyclic_rel_types'], ['REPLY_OF'])
         self.assertNotIn('constraints_file', mapping)
 
     def test_internal_names_and_classes(self):
         c = load_constraints(SHARED)
-        self.assertEqual(len(c.items), 12)
+        self.assertEqual(len(c.items), 13)
         self.assertEqual(c.acyclic, {'REPLYOF'})
         self.assertIsNotNone(c.at_most_one_out('REPLYOF', {'COMMENT'}))
         self.assertIsNone(c.at_most_one_out('REPLYOF', {'FORUM'}))
@@ -112,10 +113,13 @@ class SharedConstraints(unittest.TestCase):
                          "MATCH (n:PERSON)-[r:ISLOCATEDIN]->(x) WHERE NOT (label(x) = 'PLACE' AND "
                          "x.type = 'City') RETURN count(r) AS violations")
         self.assertIn("n.type = 'Country'", checks['unique_property: Country.name'])
+        self.assertEqual(checks['unique_edge: -[:KNOWS]-> per ordered pair'],
+                         'MATCH (a)-[r:`KNOWS`]->(b) WITH a, b, count(r) AS c '
+                         'WHERE c > 1 RETURN count(*) AS violations')
 
     def test_middleware_parameter(self):
         with IndexMiddleware(SCHEMA, dialect='kuzu', constraints=SHARED) as mw:
-            self.assertEqual(len(mw.constraint_checks()), 12)
+            self.assertEqual(len(mw.constraint_checks()), 13)
         with IndexMiddleware(SCHEMA, dialect='kuzu') as mw:
             self.assertEqual(mw.constraint_checks(), [])
 

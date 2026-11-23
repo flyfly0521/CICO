@@ -184,8 +184,13 @@ static std::vector<std::string> getPropertyNames(
   common::case_insensitve_set_t propertyNamesSet;
   for (auto& entry : entries) {
     for (auto& property : entry->getProperties()) {
+      // A FILL group row count (n_rows) is readable like a public COUNT(*)
+      // column (Binder::reservedInPropertyLookup): rewrites read it as the
+      // group-presence test. Other private aggregate state stays hidden.
       if (property.getName().starts_with(
-              InternalKeyword::FILL_AGGREGATE_STATE_PREFIX)) {
+              InternalKeyword::FILL_AGGREGATE_STATE_PREFIX) &&
+          !property.getName().starts_with(
+              InternalKeyword::FILL_ROW_COUNT_STATE_PREFIX)) {
         continue;
       }
       if (propertyNamesSet.contains(property.getName())) {

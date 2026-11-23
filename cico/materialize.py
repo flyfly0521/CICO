@@ -254,7 +254,13 @@ class Materializer:
                 for c in values:
                     if c not in declared:
                         out['ddl'] += d.add_column_ddl(target, c, self._column_type(item, c), None)
-                out['reset'].append(d.fill_statement(f'MATCH ()-[cico_e{types}]->() WITH cico_e',
+                # A FILL into one child of a REL group owns only that child's
+                # edges: resetting the whole group would delete the sibling
+                # FILLs' edges (q5_index_Post_Tag vs q5_index_Comment_Tag).
+                src_end, dst_end = (
+                    (f"(:{d.ident(child['source_vertex'])})", f"(:{d.ident(child['destination_vertex'])})")
+                    if child else ('()', '()'))
+                out['reset'].append(d.fill_statement(f'MATCH {src_end}-[cico_e{types}]->{dst_end} WITH cico_e',
                                                      'DELETE cico_e', ['cico_e']))
         return out
 

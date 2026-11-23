@@ -64,8 +64,10 @@ std::optional<SourceCount> proveSource(const FillIndexAuxInfo& info,
   if (info.getFillType() != FillEntryType::NODE || info.getSourceQuery().empty() ||
       !info.getPresenceColumns().empty() || !info.getPredicateTemplates().empty() ||
       !info.getExistsPredicates().empty()) return std::nullopt;
-  auto* table = context.getCatalog()->getTableCatalogEntry(
-      context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry());
+  auto* table =
+      // A FILL may target a REL group, which is not a table entry (lookup throws).
+      context.getCatalog()->containsTable(context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry()) ?
+      context.getCatalog()->getTableCatalogEntry(context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry()) : nullptr;
   if (table == nullptr || table->getType() != CatalogEntryType::NODE_TABLE_ENTRY)
     return std::nullopt;
   std::string countColumn;

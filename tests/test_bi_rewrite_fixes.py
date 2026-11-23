@@ -147,25 +147,37 @@ class BIRewriteFixTests(unittest.TestCase):
 
     def test_recorded_compiler_changes_are_in_the_sources(self):
         """compiler/upstream/patches records CICO's changes to the upstream
-        compiler; tools/sync_compiler.py re-applies them after an upstream
-        sync.  Each hunk must reverse-apply cleanly to compiler/, i.e. the
-        sources contain exactly what is recorded.  If you change these lines,
-        update the patch as well."""
+        compiler; tools/sync_compiler.py re-applies them in series order after
+        an upstream sync.  Un-applying the series in reverse order must succeed
+        without fuzz on a copy of compiler/, i.e. the sources contain exactly
+        what is recorded (later patches may edit lines of earlier ones).  If
+        you change compiler sources, record the change in a patch as well."""
+        import shutil
         compiler = ROOT / 'compiler'
         patches = compiler / 'upstream/patches'
         names = [l.strip() for l in (patches / 'series').read_text().splitlines()
                  if l.strip() and not l.startswith('#')]
         self.assertTrue(names)
-        for name in reversed(names):
-            for section in (patches / name).read_text().split('diff --git ')[1:]:
-                target = section.split()[0][2:]
-                if not (compiler / target).exists():
-                    continue        # hunks for upstream unit tests
-                with self.subTest(patch=name, file=target):
+        series = []
+        for name in names:
+            sections = [section for section in (patches / name).read_text().split('diff --git ')[1:]
+                        if (compiler / section.split()[0][2:]).exists()]   # skip upstream unit tests
+            series.append((name, sections))
+        with tempfile.TemporaryDirectory() as tmp:
+            for _, sections in series:
+                for section in sections:
+                    target = section.split()[0][2:]
+                    (Path(tmp) / target).parent.mkdir(parents=True, exist_ok=True)
+                    if not (Path(tmp) / target).exists():
+                        shutil.copy(compiler / target, Path(tmp) / target)
+            for name, sections in reversed(series):
+                with self.subTest(patch=name):
                     result = subprocess.run(
-                        ['patch', '--dry-run', '--batch', '--reverse', '--fuzz=0', '-p1', '-d', str(compiler)],
-                        input=('diff --git ' + section).encode(), capture_output=True)
+                        ['patch', '--batch', '--reverse', '--fuzz=0', '--no-backup-if-mismatch', '-p1', '-d', tmp],
+                        input=''.join('diff --git ' + section for section in sections).encode(),
+                        capture_output=True)
                     self.assertEqual(result.returncode, 0, result.stdout.decode() + result.stderr.decode())
+
 
 if __name__ == '__main__':
     unittest.main()

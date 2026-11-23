@@ -110,8 +110,7 @@ def registration(docs, runner, tmp):
 
 def query_path(docs, number):
     original = docs / f'Kuzu/queries/baseline/ldbc-bi/bi-{number}.cypher'
-    overlay = Path(W.OVERLAY) / original.relative_to(docs) if W.OVERLAY else None
-    return original, (overlay if overlay is not None and overlay.is_file() else None)
+    return original, W.input_file(original)
 
 
 def rewrites(docs, runner):
@@ -246,7 +245,7 @@ def main():
     report = {'system': 'kuzu', 'docs_commit': git_head(docs), 'middleware_commit': git_head(ROOT),
               'store': args.store, 'store_copy': str(copy), 'target': json.loads(runner.target),
               'schema': str(SCHEMA), 'index_input': 'NeuG/queries/index/ldbc-bi',
-              'queries': 'Kuzu/queries/baseline/ldbc-bi', 'query_edits': W.OVERLAY, 'sample': 0,
+              'queries': 'Kuzu/queries/baseline/ldbc-bi', 'query_edits': str(W.input_dir('kuzu', 'ldbc-bi')) if W.USE_INPUT else None, 'sample': 0,
               'registration_explain_only': True,
               'workload_queries_executed': bool(args.build and args.compare_results)}
     try:

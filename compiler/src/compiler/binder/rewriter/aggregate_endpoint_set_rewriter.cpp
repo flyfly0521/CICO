@@ -26,8 +26,10 @@ bool provesAggregateEndpointSetSource(
       info.getSourceQuery().empty() || info.getSrcNodeUniqueName().empty() ||
       info.getDstNodeUniqueName().empty() ||
       info.getSrcNodeUniqueName() == info.getDstNodeUniqueName()) return false;
-  auto* carrier = context.getCatalog()->getTableCatalogEntry(
-      context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry());
+  auto* carrier =
+      // A FILL may target a REL group, which is not a table entry (lookup throws).
+      context.getCatalog()->containsTable(context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry()) ?
+      context.getCatalog()->getTableCatalogEntry(context.getTransaction(), info.getTableName(), context.useInternalCatalogEntry()) : nullptr;
   if (carrier == nullptr || carrier->getType() != CatalogEntryType::REL_TABLE_ENTRY)
     return false;
   const auto& relation = carrier->constCast<RelTableCatalogEntry>();

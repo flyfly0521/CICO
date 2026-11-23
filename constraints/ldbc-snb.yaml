@@ -40,3 +40,4 @@ constraints:
   - {kind: unique_property, label: Country, property: name}
   - {kind: required_property, label: Tag, property: name}
   - {kind: required_property, label: Country, property: name}
+  - {kind: unique_edge, rel: KNOWS}

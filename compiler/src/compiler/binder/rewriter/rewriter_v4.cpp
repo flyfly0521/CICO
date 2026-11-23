@@ -89,6 +89,32 @@ static auto* tableByName(CatalogT* catalog, TransactionT* transaction, const std
   return catalog->getTableCatalogEntry(transaction, name, useInternal);
 }
 
+// The physical carrier table of a FILL. A FILL into one child of a REL group
+// (FILL g_Src_Dst() ...) records the group name and its endpoint tables,
+// which select exactly one child. A FILL routed to several children has no
+// single carrier (nullptr).
+static TableCatalogEntry* fillCarrierTable(Catalog* catalog,
+    const transaction::Transaction* transaction, const FillIndexAuxInfo& info,
+    bool useInternal) {
+  if (catalog == nullptr) return nullptr;
+  if (catalog->containsTable(transaction, info.getTableName(), useInternal))
+    return catalog->getTableCatalogEntry(transaction, info.getTableName(), useInternal);
+  if (info.getFillType() != FillEntryType::REL || info.getSrcTableId() == UINT32_MAX ||
+      info.getDstTableId() == UINT32_MAX ||
+      !catalog->containsRelGroup(transaction, info.getTableName())) return nullptr;
+  TableCatalogEntry* child = nullptr;
+  for (const auto id : catalog->getRelGroupEntry(transaction, info.getTableName())->getRelTableIDs()) {
+    auto* entry = catalog->getTableCatalogEntry(transaction, id);
+    if (entry == nullptr || entry->getType() != CatalogEntryType::REL_TABLE_ENTRY) continue;
+    const auto& rel = entry->constCast<RelTableCatalogEntry>();
+    if (rel.getSrcTableID() != info.getSrcTableId() ||
+        rel.getDstTableID() != info.getDstTableId()) continue;
+    if (child != nullptr) return nullptr;
+    child = entry;
+  }
+  return child;
+}
+
 static std::string tableLabel(const catalog::TableCatalogEntry* entry,
                                      const RelLabelMap& labels) {
   const auto found = labels.find(entry->getTableID());
@@ -168,7 +194,6 @@ static bool predicateCoveredByFill(
 // extrema or floating SUM after removing only a local portion of a query.
 static bool requiresCompleteAggregateRead(const FillIndexAuxInfo& info,
                                          main::ClientContext* context) {
-  bool hasSum = false;
   for (const auto& column : info.getIndexColumnInfos()) {
     // Full-source values may include OPTIONAL clauses and staged finalizers.
     // Their merged PatternIR is dependency metadata, not an additive local
@@ -197,16 +222,13 @@ static bool requiresCompleteAggregateRead(const FillIndexAuxInfo& info,
         (function.empty() && (spelling.find("AVG(") != std::string::npos ||
                              spelling.find("MIN(") != std::string::npos ||
                              spelling.find("MAX(") != std::string::npos))) return true;
-    hasSum |= function == "SUM" || spelling.find("SUM(") != std::string::npos;
   }
-  if (!hasSum) return false;
-  const auto* table = tableByName(context->getCatalog(), context->getTransaction(), info.getTableName());
-  if (table == nullptr) return true;  // unknown carrier layout: require the complete-read proof
-  for (const auto& name : info.getTargetColumns()) {
-    if (!table->containsProperty(name)) continue;
-    const auto type = table->getProperty(name).getType().getLogicalTypeID();
-    if (type == LogicalTypeID::FLOAT || type == LogicalTypeID::DOUBLE) return true;
-  }
+  // SUM and COUNT are additive. A floating SUM read as a sum of stored partial
+  // sums differs from the original only by summation order, which the target
+  // systems do not fix either (parallel aggregation). CICO compares under
+  // real-number semantics (user decision 2026-11-22), so FLOAT/DOUBLE SUM
+  // columns no longer require a complete-group read.
+  (void)context;
   return false;
 }
 
@@ -222,15 +244,22 @@ static bool isPublicRowCount(const FillIndexAuxInfo& info, size_t column) {
       target.starts_with(InternalKeyword::FILL_ROW_COUNT_STATE_PREFIX)) return false;
   const auto& metadata = info.getIndexColumnInfos()[column];
   if (metadata == nullptr) return false;
-  std::string spelling, function;
+  std::string spelling, function, property;
+  std::shared_ptr<::common::Expression> argument;
+  std::vector<std::string> variables;
   if (info.getFillType() == FillEntryType::NODE && metadata->columnType == IndexColumnType::NODE_AGGREGATE) {
     const auto& aggregate = static_cast<const NodeAggregationIndexColnumInfo&>(*metadata);
     spelling = aggregate.nameTemplate;
     function = aggregate.aggregateFuncName;
+    property = aggregate.propertyName;
+    argument = aggregate.aggregateArgExpr;
+    variables = aggregate.nodeUniqueNames;
   } else if (info.getFillType() == FillEntryType::REL && metadata->columnType == IndexColumnType::REL_AGGREGATE) {
     const auto& aggregate = static_cast<const RelIndexColnumInfo&>(*metadata);
     spelling = aggregate.nameTemplate;
     function = aggregate.aggregateFuncName;
+    argument = aggregate.aggregateArgExpr;
+    variables = aggregate.nodeUniqueNames;
   } else {
     return false;
   }
@@ -239,7 +268,32 @@ static bool isPublicRowCount(const FillIndexAuxInfo& info, size_t column) {
                  [](unsigned char ch) { return std::toupper(ch); });
   std::transform(function.begin(), function.end(), function.begin(),
                  [](unsigned char ch) { return std::toupper(ch); });
-  return spelling == "COUNT(*)" && (function == "COUNT" || function == "COUNT_STAR");
+  if (function != "COUNT" && function != "COUNT_STAR") return false;
+  if (spelling == "COUNT(*)") return true;
+  // theory.md, Definition 4: COUNT(x) adds f(w) = 1 for every row in which x
+  // is non-NULL. In a FILL source without OPTIONAL MATCH every node and
+  // relationship variable is bound in every row, so COUNT(<bare variable>)
+  // (e.g. COUNT(liker) or COUNT(likes) for (m)<-[likes:LIKES]-(liker)) is the
+  // source's COUNT(*). Properties, expressions and DISTINCT stay excluded.
+  if (spelling.rfind("COUNT(", 0) != 0 || spelling.find("DISTINCT") != std::string::npos ||
+      !property.empty()) return false;
+  std::string source = info.getSourceQuery();
+  std::transform(source.begin(), source.end(), source.begin(),
+                 [](unsigned char ch) { return std::toupper(ch); });
+  if (source.empty() || source.find("OPTIONAL") != std::string::npos) return false;
+  const auto& pattern = info.getPatternIR();
+  // Template form: COUNT({}) with the single placeholder naming a pattern
+  // node or relationship of the FILL source.
+  if (spelling == "COUNT({})" && variables.size() == 1) {
+    return pattern.nodeUniqNameToPos.contains(variables[0]) ||
+        pattern.relUniqueNameToPos.contains(variables[0]);
+  }
+  // AST form: a bare variable tag (no property) of the FILL pattern.
+  if (argument == nullptr || argument->operators_size() != 1) return false;
+  const auto& op = argument->operators(0);
+  return op.has_var() && op.var().has_tag() && !op.var().has_property() &&
+      op.var().tag().id() >= 0 &&
+      static_cast<size_t>(op.var().tag().id()) < pattern.nodesInfo.size() + pattern.relsInfo.size();
 }
 
 static bool sameCountProperty(const std::shared_ptr<Expression>& left,
@@ -500,6 +554,14 @@ static std::shared_ptr<Expression> makeDirectionAwareRelPropertyExpression(
   if (!matchesDirectionReference(referenceNode) &&
       matchesDirectionReference(targetRel->getDstNode())) {
     referenceNode = targetRel->getDstNode();
+  }
+  // A directed pattern binds srcNode to the stored edge's source, so
+  // STRUCT_EXTRACT(rel, _SRC) = referenceNode is decided by the pattern: read
+  // the forward column from the source side and the reverse one otherwise.
+  // Only an undirected pattern needs the run-time test below.
+  if (targetRel->getDirectionType() == RelDirectionType::SINGLE &&
+      !targetRel->isRecursive()) {
+    return referenceNode == targetRel->getSrcNode() ? forward : reverse;
   }
   auto isForward =
       binder->getExpressionBinder()->createEqualityComparisonExpression(
@@ -1127,7 +1189,7 @@ static bool hasOrderedDerivedRelEndpoints(
       info.getSrcNodeUniqueName() == info.getDstNodeUniqueName()) {
     return false;
   }
-  const auto* table = tableByName(context->getCatalog(), context->getTransaction(), info.getTableName(),
+  const auto* table = fillCarrierTable(context->getCatalog(), context->getTransaction(), info,
       context->useInternalCatalogEntry());
   if (table == nullptr) return false;
   const auto& pattern = info.getPatternIR();
@@ -2616,16 +2678,10 @@ bool RewriterV4::provesSingleStageEndpointSetSourceCached(const catalog::FillInd
 
 std::optional<RewriterV4::FillTableContext> RewriterV4::getFillTableContext(
     const catalog::FillIndexAuxInfo& indexInfo) const {
-  auto* catalog = clientContext->getCatalog();
-  auto* transaction = clientContext->getTransaction();
-  // A REL-group carrier (one FILL routed to several child tables) has no
-  // single table entry; callers handle the group through its children.
-  if (!catalog->containsTable(transaction, indexInfo.getTableName(),
-                              clientContext->useInternalCatalogEntry())) {
-    return std::nullopt;
-  }
-  auto* fillTableEntry = catalog->getTableCatalogEntry(
-      transaction, indexInfo.getTableName(), clientContext->useInternalCatalogEntry());
+  // A REL-group carrier routed to several child tables has no single table
+  // entry; callers handle the group through its children.
+  auto* fillTableEntry = fillCarrierTable(clientContext->getCatalog(),
+      clientContext->getTransaction(), indexInfo, clientContext->useInternalCatalogEntry());
   if (fillTableEntry == nullptr) {
     return std::nullopt;
   }
@@ -3370,11 +3426,29 @@ bool RewriterV4::validateRewriteCandidate(
               &retained.nodeUniqueNames, &retained.relUniqueNames)) return false;
     }
   }
+  // An aggregate inside a registered finalizer target (a projected scalar
+  // such as min(...) + 1 matched to a stored computation column) disappears
+  // with that scalar's replacement.
+  const auto insideFinalizer = [&](const std::shared_ptr<Expression>& aggregate) {
+    for (const auto& [target, _] : propertyRewriteTargets) {
+      if (target == nullptr || target->expressionType == ExpressionType::AGGREGATE_FUNCTION)
+        continue;
+      std::function<bool(const Expression&)> contains = [&](const Expression& e) {
+        if (e.getUniqueName() == aggregate->getUniqueName()) return true;
+        for (const auto& child : ExpressionChildrenCollector::collectChildren(e))
+          if (child != nullptr && contains(*child)) return true;
+        return false;
+      };
+      if (contains(*target)) return true;
+    }
+    return false;
+  };
   for (auto& expr : projectionBody->getAggregateExpressions()) {
     if (!projectedAggregateNames.contains(expr->getUniqueName()) &&
         !projectedAggregateNames.contains(expr->rawName())) {
       continue;
     }
+    if (insideFinalizer(expr)) continue;
     if (!validateProjectionExpressionForIndexRewrite(
             expr, matchClause, nodesIR, indexInfo, indexIR,
             &retained.nodeUniqueNames, &retained.relUniqueNames)) {
@@ -3445,7 +3519,7 @@ bool RewriterV4::validateRewriteCandidate(
     return false;
   }();
   return std::all_of(aggregates.begin(), aggregates.end(), [&](const auto& expression) {
-    if (propertyRewriteTargets.contains(expression.get())) return true;
+    if (propertyRewriteTargets.contains(expression.get()) || insideFinalizer(expression)) return true;
     // A property-copy FILL's private row counter must not make an unrelated
     // DISTINCT count look like an unweighted additive aggregate. It sees the
     // same surviving identity set after duplicate source rows collapse.
@@ -3707,9 +3781,21 @@ bool RewriterV4::registerAggregateRewriteTargets(
         // Keep this proof local to a complete optional source at the end of
         // its reading part. A following clause could consume a hidden node;
         // a wrapper can supply bindings not represented in this query.
+        // A derived relationship carrier has an edge exactly for each
+        // non-empty group G_k. A residual pattern R kept in the same OPTIONAL
+        // MATCH then matches (r, k) iff the original matches some (r, f) with
+        // f in G_k, so both sides null-extend on the same inputs, and SUM of
+        // |G_k| over the (r, k) rows equals the original COUNT.
+        // A NODE carrier keeps the anchor row (weight 0) where the original
+        // null-extends; that only agrees for a single SUM over groups keyed
+        // outside this clause (checked at the boundary below).
+        const bool derivedEdgeCarrier = indexInfo.getFillType() == FillEntryType::REL &&
+            hasOrderedDerivedRelEndpoints(indexInfo, clientContext);
+        const bool residualPattern = nodesIR.nodesInfo.size() != indexIR.nodesInfo.size() ||
+            nodesIR.relsInfo.size() != indexIR.relsInfo.size();
         if (currentQuery_ == nullptr || !completeAggregateInputIsClosed ||
-            nodesIR.nodesInfo.size() != indexIR.nodesInfo.size() ||
-            nodesIR.relsInfo.size() != indexIR.relsInfo.size()) return false;
+            (residualPattern && !derivedEdgeCarrier &&
+             indexInfo.getFillType() != FillEntryType::NODE)) return false;
         if (node != nodesIR.nodeUniqNameToPos.end()) {
           const auto matchedNode = nodesIR.nodesInfo[node->second].matchedIdx;
           if (matchedNode >= indexIR.nodesInfo.size()) return false;
@@ -3728,10 +3814,18 @@ bool RewriterV4::registerAggregateRewriteTargets(
           for (uint32_t ci = 0; ci < part->getNumReadingClause(); ++ci) {
             const auto* clause = part->getReadingClause(ci);
             if (clause == &matchClause) {
-              // SUM over no input is NULL, unlike COUNT's zero. Nonempty
-              // grouping preserves the original empty-input row contract.
-              if (ci + 1 != part->getNumReadingClause() || !part->hasProjectionBody() ||
-                  part->getProjectionBody()->getGroupByExpressions().empty()) return false;
+              // SUM over no input is NULL, unlike COUNT's zero. Without
+              // grouping keys applyIndexExpressionRewrites projects the SUM as
+              // CASE WHEN sum IS NULL THEN 0 (restoreEmptyCount).
+              if (ci + 1 != part->getNumReadingClause() || !part->hasProjectionBody()) return false;
+              if (residualPattern && !derivedEdgeCarrier) {
+                const auto* body = part->getProjectionBody();
+                if (body->getAggregateExpressions().size() != 1) return false;
+                for (const auto& key : body->getGroupByExpressions())
+                  for (const auto& name : collectDependentVarNames(key))
+                    if (nodesIR.nodeUniqNameToPos.contains(name) ||
+                        nodesIR.relUniqueNameToPos.contains(name)) return false;
+              }
               foundBoundary = true;
               break;
             }
@@ -3759,27 +3853,26 @@ bool RewriterV4::registerAggregateRewriteTargets(
       aggregateTargets.clear();
       for (size_t i = 0; i < indexInfo.indexColumnInfos.size() &&
                          i < indexInfo.targetColumns.size(); ++i) {
-        if (indexInfo.targetColumns[i].starts_with(
-                InternalKeyword::FILL_AGGREGATE_STATE_PREFIX) ||
-            indexInfo.targetColumns[i].starts_with(
-                InternalKeyword::FILL_ROW_COUNT_STATE_PREFIX)) continue;
-        const auto& column = indexInfo.indexColumnInfos[i];
-        std::string spelling;
-        if (column->columnType == IndexColumnType::NODE_AGGREGATE) {
-          spelling = static_cast<const NodeAggregationIndexColnumInfo&>(*column).nameTemplate;
-        } else if (column->columnType == IndexColumnType::REL_AGGREGATE) {
-          spelling = static_cast<const RelIndexColnumInfo&>(*column).nameTemplate;
-        }
-        std::erase_if(spelling, [](unsigned char ch) { return std::isspace(ch); });
-        std::transform(spelling.begin(), spelling.end(), spelling.begin(),
-                       [](unsigned char ch) { return std::toupper(ch); });
-        if (spelling == "COUNT(*)") {
+        // COUNT(*) or COUNT(<bare variable>) of a FILL source without OPTIONAL.
+        if (isPublicRowCount(indexInfo, i)) {
           aggregateTargets.emplace(expr.get(), i);
           break;
         }
       }
       if (aggregateTargets.empty()) return false;
     }
+    // The FILL's private row-count state and a public COUNT(*) column of the
+    // same FILL hold the same per-group value. Read the public column: only
+    // it is part of the user schema the rewritten statement is bound against.
+    std::optional<size_t> publicRowCount;
+    for (size_t i = 0; i < indexInfo.getTargetColumns().size() && !publicRowCount; ++i)
+      if (isPublicRowCount(indexInfo, i)) publicRowCount = i;
+    if (publicRowCount)
+      for (auto& [aggregateExpr, column] : aggregateTargets)
+        if (column < indexInfo.getTargetColumns().size() &&
+            indexInfo.getTargetColumns()[column].starts_with(
+                InternalKeyword::FILL_ROW_COUNT_STATE_PREFIX))
+          column = *publicRowCount;
   } else {
     auto* scalarFuncExpr = expr->ptrCast<ScalarFunctionExpression>();
     if (scalarFuncExpr == nullptr ||
@@ -3822,6 +3915,10 @@ bool RewriterV4::registerAggregateRewriteTargets(
           indexInfo.getTableName()) {
         target.newVarUniqueName = rel->getUniqueName();
         target.newVarRawName = rel->getVariableName();
+        // An anonymous carrier edge of a complete-group read still has a
+        // bound identity (as anonymous NODE carriers do above).
+        if (target.newVarRawName.empty() && completePairDistinctCountCandidate)
+          target.newVarRawName = target.newVarUniqueName;
         break;
       }
     }
@@ -4256,10 +4353,18 @@ void RewriterV4::nodeIndexRewrite(NormalizedQueryPart& queryPart,
     graph.addQueryNode(targetNode);
     if (matchClause.getMatchClauseType() == MatchClauseType::OPTIONAL_MATCH &&
         !indexInfo.getRowCountColumn().empty()) {
+      // A public COUNT(*) column of the FILL holds the same per-group row
+      // count as the private state and is part of the user schema.
+      auto rowCountColumn = indexInfo.getRowCountColumn();
+      for (size_t i = 0; i < indexInfo.getTargetColumns().size(); ++i)
+        if (isPublicRowCount(indexInfo, i)) {
+          rowCountColumn = indexInfo.getTargetColumns()[i];
+          break;
+        }
       auto present = binder->getExpressionBinder()->bindComparisonExpression(
           ExpressionType::GREATER_THAN,
           expression_vector{makeFillPropertyExpression(*getFillTableContext(indexInfo),
-              PropertyRewriteTarget{targetNode->getUniqueName(), targetNode->getVariableName(), indexInfo.getRowCountColumn()}),
+              PropertyRewriteTarget{targetNode->getUniqueName(), targetNode->getVariableName(), rowCountColumn}),
               binder->getExpressionBinder()->createLiteralExpression(Value(int64_t{0}))});
       matchClause.setPredicate(binder->getExpressionBinder()->combineBooleanExpressions(
           ExpressionType::AND, matchClause.getPredicate(), present));
@@ -4351,6 +4456,32 @@ void RewriterV4::stageSelectiveVariadicAnchorSplit(
   for (auto& nodeName : prefixNodes) {
     if (nodeName != anchorNode->getUniqueName() && projectionDeps.contains(nodeName)) {
       return;
+    }
+  }
+  // The staged prefix ends in WITH DISTINCT <anchor>; every binding of an
+  // earlier QueryPart is dropped there. If this part reads one (a pattern
+  // node such as LDBC BI3's moderator `person`, a predicate or a projected
+  // value), the remaining MATCH would rebind it freely. Do not split.
+  {
+    std::unordered_set<std::string> used = projectionDeps;
+    if (matchClause.hasPredicate()) {
+      const auto deps = collectDependentVarNames(matchClause.getPredicate());
+      used.insert(deps.begin(), deps.end());
+    }
+    for (const auto& node : queryGraph.getQueryNodes()) used.insert(node->getUniqueName());
+    for (const auto& rel : queryGraph.getQueryRels()) used.insert(rel->getUniqueName());
+    if (currentQuery_ == nullptr) return;
+    for (uint32_t i = 0; i < currentQuery_->getNumQueryParts(); ++i) {
+      const auto* previous = currentQuery_->getQueryPart(i);
+      if (previous == &queryPart) break;
+      if (!previous->hasProjectionBody()) continue;
+      for (const auto& expression : previous->getProjectionBody()->getProjectionExpressions()) {
+        if (expression == nullptr) continue;
+        if (used.contains(expression->getUniqueName()) ||
+            (expression->hasAlias() && used.contains(expression->getAlias()))) {
+          return;
+        }
+      }
     }
   }
 
@@ -4814,7 +4945,11 @@ void RewriterV4::applyIndexExpressionRewrites(catalog::IndexCatalogEntry* entry,
   auto& indexInfo = entry->getAuxInfoUnsafe().cast<catalog::FillIndexAuxInfo>();
   auto fillTable = getFillTableContext(indexInfo);
   if (!fillTable.has_value()) {
-    return;
+    // The pattern has already been replaced by the carrier: leaving the
+    // aggregates unrewritten would count carrier rows instead of reading the
+    // stored values. Reject the candidate.
+    THROW_INDEX_EXCEPTION("No single FILL carrier table for expression rewrite: " +
+                          indexInfo.getTableName());
   }
 
   // A single ungrouped COUNT(*) is a linear total: absent prefix rows
@@ -4847,6 +4982,10 @@ void RewriterV4::applyIndexExpressionRewrites(catalog::IndexCatalogEntry* entry,
                          std::shared_ptr<Expression>>>
       nonzeroCountPreProjectionPredicates;
   expression_vector replacementAggregateExpressions;
+  // A projection without grouping keys yields one row even for empty input.
+  // COUNT then returns 0 while the SUM that replaces it returns NULL.
+  const bool groupFreeProjection = queryPart.hasProjectionBody() &&
+      queryPart.getProjectionBody()->getGroupByExpressions().empty();
   const ExpressionRewriteRule rewriteRule = [&](std::shared_ptr<Expression>& expr) -> bool {
     if (!expr) {
       return true;
@@ -4997,9 +5136,40 @@ void RewriterV4::applyIndexExpressionRewrites(catalog::IndexCatalogEntry* entry,
           for (const auto& name : oldRawVars)
             if (std::find(replacementRawVars.begin(), replacementRawVars.end(), name) == replacementRawVars.end())
               replacementRawVars.push_back(name);
+        } else if (target.completePairDistinctCount && !originalDistinct &&
+                   indexInfo.fillType == FillEntryType::NODE &&
+                   matchClause.getMatchClauseType() == MatchClauseType::OPTIONAL_MATCH) {
+          // Complete group under OPTIONAL MATCH: an empty group has no source
+          // row, so the original aggregate is NULL (COUNT: 0), whatever the
+          // carrier's DEFAULT. Guard the stored value by the group's public
+          // row count instead of replacing NULL by 0.
+          std::optional<std::string> rowCount;
+          for (size_t column = 0; column < indexInfo.getTargetColumns().size() && !rowCount; ++column)
+            if (isPublicRowCount(indexInfo, column)) rowCount = indexInfo.getTargetColumns()[column];
+          if (!rowCount.has_value() || binder == nullptr) {
+            THROW_INDEX_EXCEPTION("OPTIONAL complete-group read needs a public row count: " +
+                                  oldUniqueName);
+          }
+          auto rowCountTarget = target;
+          rowCountTarget.newPropertyName = *rowCount;
+          auto present = binder->getExpressionBinder()->bindComparisonExpression(
+              ExpressionType::GREATER_THAN,
+              expression_vector{makeFillPropertyExpression(*fillTable, rowCountTarget),
+                                binder->getExpressionBinder()->createLiteralExpression(Value(int64_t{0}))});
+          const bool countAggregate = aggregateFunctionName == "COUNT" ||
+                                      aggregateFunctionName == "COUNT_STAR";
+          auto missing = binder->getExpressionBinder()->createLiteralExpression(
+              countAggregate ? Value(int64_t{0}) : Value::createNullValue(replacement->getDataType()));
+          auto guarded = std::make_shared<CaseExpression>(replacement->getDataType().copy(),
+              missing, oldUniqueName + "_fill_complete_optional_guard");
+          guarded->addCaseAlternative(std::move(present), replacement);
+          replacement = guarded;
         } else if (!directGlobalCount && (indexInfo.fillType == FillEntryType::NODE ||
             (indexInfo.fillType == FillEntryType::REL &&
-             !target.directionAwareSameLabelRel))) {
+             (!target.directionAwareSameLabelRel ||
+              // Under OPTIONAL MATCH the carrier edge may be NULL; the
+              // direction CASE then yields NULL, but the row counts 0.
+              matchClause.getMatchClauseType() == MatchClauseType::OPTIONAL_MATCH)))) {
           replacement = makeZeroIfNullExpression(binder, replacement);
         }
         if (directGlobalCount) {
@@ -5019,10 +5189,15 @@ void RewriterV4::applyIndexExpressionRewrites(catalog::IndexCatalogEntry* entry,
           guarded->addCaseAlternative(deepCopyShared(matchClause.getPredicate()), replacement);
           replacement = guarded;
         }
+        const std::string replacementFunctionName =
+            countBackedAggregate && !countNonNull ? aggregateFunctionName :
+                target.completePairDistinctCount ? "MAX" : "SUM";
+        const bool restoreEmptyCount = groupFreeProjection && binder != nullptr &&
+            (aggregateFunctionName == "COUNT" || aggregateFunctionName == "COUNT_STAR") &&
+            replacementFunctionName == "SUM";
         replacement = makeValueAggregateExpression(
             clientContext, replacement, oldAlias, oldParsedName,
-            replacementRawVars, countBackedAggregate && !countNonNull ? aggregateFunctionName :
-                target.completePairDistinctCount ? "MAX" : "SUM",
+            replacementRawVars, replacementFunctionName,
             countBackedAggregate && originalDistinct);
         // WITH aliases can be referenced across several query parts. Keep
         // their bound identity for both node and relationship FILL aggregates.
@@ -5064,8 +5239,90 @@ void RewriterV4::applyIndexExpressionRewrites(catalog::IndexCatalogEntry* entry,
           if (globalCountProductProof && oldUniqueName == globalCountProductProof->aggregateUniqueName)
             globalCountProductProof->introducedPresencePredicates.insert(
                 std::get<2>(nonzeroCountPreProjectionPredicates.back())->getUniqueName());
+        } else if (!directGlobalCount && indexInfo.fillType == FillEntryType::REL &&
+                   matchClause.getMatchClauseType() == MatchClauseType::MATCH &&
+                   binder != nullptr &&
+                   // A derived relationship holds one edge per non-empty group.
+                   !hasOrderedDerivedRelEndpoints(indexInfo, clientContext)) {
+          // theory.md, Definition 6: a key is in the rewritten result only if
+          // its group G_k is non-empty. A REL property carrier is read on every
+          // stored edge, including edges whose group is empty (the column then
+          // holds its DEFAULT), so a mandatory MATCH needs the group-presence
+          // test |G_k| != 0, read from a public row count of the same FILL in
+          // the same direction as the value. Without one, reject the candidate.
+          std::optional<std::string> rowCount;
+          for (size_t column = 0; column < indexInfo.getTargetColumns().size(); ++column) {
+            if (isPublicRowCount(indexInfo, column)) {
+              rowCount = indexInfo.getTargetColumns()[column];
+              break;
+            }
+          }
+          // Otherwise the FILL's private group-row state (non-zero exactly for
+          // materialized groups; reset to 0 on every other edge).
+          bool privateRowCount = false;
+          if (!rowCount.has_value()) {
+            for (const auto& column : indexInfo.getTargetColumns()) {
+              if (column.starts_with(InternalKeyword::FILL_ROW_COUNT_STATE_PREFIX)) {
+                rowCount = column;
+                privateRowCount = true;
+                break;
+              }
+            }
+          }
+          if (!rowCount.has_value() || (privateRowCount && target.directionAwareSameLabelRel)) {
+            THROW_INDEX_EXCEPTION("REL FILL aggregate under MATCH needs a row count "
+                                  "for group presence: " + oldUniqueName);
+          }
+          std::string forwardRowCount, reverseRowCount;
+          if (target.directionAwareSameLabelRel) {
+            const auto pair = directionAwareCounterpartColumns(*fillTable->entry, *rowCount);
+            if (!pair.has_value()) {
+              THROW_INDEX_EXCEPTION("No direction counterpart for row count " + *rowCount);
+            }
+            // Orient the row count like the value: the value reads its matched
+            // column (target.forwardPropertyName) on an edge traversed from
+            // the FILL source side. When that column is the `_rev` member of
+            // its pair (e.g. a FILL of q2_cnt_rev), the presence test must
+            // read the `_rev` row count on that side too, not `_fwd`.
+            const auto valuePair =
+                directionAwareCounterpartColumns(*fillTable->entry, target.forwardPropertyName);
+            const bool valueReadsReverseMember =
+                valuePair.has_value() && valuePair->second == target.forwardPropertyName;
+            forwardRowCount = valueReadsReverseMember ? pair->second : pair->first;
+            reverseRowCount = valueReadsReverseMember ? pair->first : pair->second;
+          }
+          auto presence = makeDirectionAwareRelPropertyExpression(
+              binder, fillTable->entry, fillTable->tableID,
+              target.newVarUniqueName, target.newVarRawName, *rowCount,
+              forwardRowCount, reverseRowCount, target.directionAwareSameLabelRel,
+              targetRel, target.directionReferenceNodeUniqueName,
+              target.directionReferenceNodeRawName);
+          auto zero = Value::createDefaultValue(presence->getDataType());
+          auto zeroExpr = std::make_shared<LiteralExpression>(zero, zero.toString());
+          nonzeroCountPreProjectionPredicates.emplace_back(
+              target.newVarUniqueName, target.targetNode,
+              binder->getExpressionBinder()->bindComparisonExpression(
+                  ExpressionType::NOT_EQUALS,
+                  expression_vector{std::move(presence), std::move(zeroExpr)}));
         }
 
+        if (restoreEmptyCount) {
+          // COUNT over no rows is 0; SUM over no rows is NULL. Without
+          // grouping keys the projection still emits that row, so project
+          // CASE WHEN sum IS NULL THEN 0 ELSE sum END under the original name.
+          replacement->setUniqueName(oldUniqueName + "#fill_sum");
+          // Aggregates have no copy(); both CASE operands share the node.
+          auto isNull = binder->getExpressionBinder()->bindNullOperatorExpression(
+              ExpressionType::IS_NULL, expression_vector{replacement});
+          auto zero = Value::createDefaultValue(replacement->getDataType());
+          auto restored = std::make_shared<CaseExpression>(
+              replacement->getDataType().copy(), replacement, oldUniqueName);
+          restored->addCaseAlternative(std::move(isNull),
+              std::make_shared<LiteralExpression>(zero, zero.toString()));
+          if (!oldAlias.empty()) restored->setAlias(oldAlias);
+          expr = std::move(restored);
+          return true;
+        }
         expr = std::move(replacement);
         return true;
       }
@@ -5097,6 +5354,52 @@ void RewriterV4::applyIndexExpressionRewrites(catalog::IndexCatalogEntry* entry,
       }
 
       auto replacement = makeFillPropertyExpression(*fillTable, target);
+      std::unordered_set<std::string> innerAggregates;
+      collectAggregateUniqueNames(expr, innerAggregates);
+      if (target.completePairDistinctCount && !innerAggregates.empty()) {
+        // Complete key group read of a stored finalizer (e.g. min(...) + 1):
+        // every row of the group carries the group's value, so MAX over the
+        // group's rows returns it (as for complete-group DISTINCT counts).
+        auto value = makeValueAggregateExpression(
+            clientContext, replacement, oldAlias, expr->getParsedName(),
+            std::vector<std::string>{target.newVarRawName}, "MAX", false);
+        value->setUniqueName(oldUniqueName);
+        if (!oldAlias.empty()) {
+          value->setAlias(oldAlias);
+          auto aliasRef = makeProjectionAliasReference(*value, oldAlias);
+          uniqueNameRewriteMap[oldUniqueName] = aliasRef;
+          uniqueNameRewriteMap[oldAlias] = aliasRef;
+        }
+        replacementAggregateExpressions.push_back(value);
+        // Mandatory MATCH over an existing carrier edge: keep only edges of
+        // materialized groups (row count, public or private, is non-zero).
+        if (indexInfo.fillType == FillEntryType::REL &&
+            matchClause.getMatchClauseType() == MatchClauseType::MATCH && binder != nullptr &&
+            !hasOrderedDerivedRelEndpoints(indexInfo, clientContext)) {
+          std::optional<std::string> rowCount;
+          for (size_t column = 0; column < indexInfo.getTargetColumns().size() && !rowCount; ++column)
+            if (isPublicRowCount(indexInfo, column)) rowCount = indexInfo.getTargetColumns()[column];
+          for (const auto& column : indexInfo.getTargetColumns())
+            if (!rowCount && column.starts_with(InternalKeyword::FILL_ROW_COUNT_STATE_PREFIX))
+              rowCount = column;
+          if (!rowCount.has_value() || target.directionAwareSameLabelRel) {
+            THROW_INDEX_EXCEPTION("complete-group read needs a row count for group presence: " +
+                                  oldUniqueName);
+          }
+          auto presenceTarget = target;
+          presenceTarget.newPropertyName = *rowCount;
+          auto presence = makeFillPropertyExpression(*fillTable, presenceTarget);
+          auto zero = Value::createDefaultValue(presence->getDataType());
+          auto zeroExpr = std::make_shared<LiteralExpression>(zero, zero.toString());
+          nonzeroCountPreProjectionPredicates.emplace_back(
+              target.newVarUniqueName, target.targetNode,
+              binder->getExpressionBinder()->bindComparisonExpression(
+                  ExpressionType::NOT_EQUALS,
+                  expression_vector{std::move(presence), std::move(zeroExpr)}));
+        }
+        expr = std::move(value);
+        return true;
+      }
       replacement->setUniqueName(oldUniqueName);
       if (!oldAlias.empty()) {
         replacement->setAlias(oldAlias);
