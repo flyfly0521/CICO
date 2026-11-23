@@ -5,6 +5,7 @@ raises Unsupported and the middleware returns the original query.  Output is
 additionally verified by re-binding (canonical.py), so the printer is never
 trusted blindly.
 """
+import re
 from dataclasses import dataclass, field
 
 from .dialects import Dialect, get_dialect
@@ -111,6 +112,7 @@ class Printer:
             raise Unsupported('pre/post query parts')
         self.names = self._assign_names(statement)
         self.statement = statement
+        self._name_paths(statement)
         tables = {}
 
         def collect(value):
@@ -239,6 +241,34 @@ class Printer:
     def _graphs(self, graphs):
         return ', '.join(text for text, _ in self._pattern_parts(graphs))
 
+    def _name_paths(self, statement):
+        """Named paths.  The IR keeps a path only where it is used, as a PATH
+        expression over [start node, relationship, end node]; the MATCH that
+        binds it prints `name = (start)-[...]-(end)` (single-relationship
+        paths, e.g. `path = (a)-[:KNOWS* ALL SHORTEST 1..]-(b)`)."""
+        self.path_of_rel, self.path_name = {}, {}
+        taken = set(self.names.values())
+
+        def walk(value):
+            if isinstance(value, dict):
+                if value.get('k') == 'PATH' and value.get('uid') not in self.path_name:
+                    children = value.get('children') or []
+                    if len(children) != 3 or not all(is_entity_ref(c) for c in children) \
+                            or children[1].get('entity_kind') != 'REL':
+                        raise Unsupported('path expression')
+                    name = re.sub(r'^_\d+_', '', value['uid']) or 'cico_path'
+                    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name) or name in taken:
+                        name = f'cico_path{len(self.path_name) + 1}'
+                    taken.add(name)
+                    self.path_name[value['uid']] = name
+                    self.path_of_rel[children[1]['entity']] = (name, children[0]['entity'], children[2]['entity'])
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+        walk(statement)
+
     def _pattern_parts(self, graphs):
         """[(pattern text, relationship IR or None)], one per relationship
         plus one per isolated node."""
@@ -252,12 +282,21 @@ class Printer:
                 if rel['src'] not in nodes or rel['dst'] not in nodes:
                     raise Unsupported('relationship endpoint outside its query graph')
                 touched.update((rel['src'], rel['dst']))
+                path = self.path_of_rel.get(rel['uid'])
+                first, second = rel['src'], rel['dst']
+                if path is not None and (path[1], path[2]) != (first, second):
+                    # the path lists its nodes from its start: an undirected
+                    # relationship is printed from there
+                    if rel.get('direction') != 'BOTH' or (path[2], path[1]) != (first, second):
+                        raise Unsupported('path direction')
+                    first, second = second, first
                 body = self._rel(rel)
-                src, dst = self._node(nodes[rel['src']]), self._node(nodes[rel['dst']])
+                src, dst = self._node(nodes[first]), self._node(nodes[second])
+                prefix = f'{self.dialect.ident(path[0])} = ' if path is not None else ''
                 if rel.get('direction') == 'SINGLE':
-                    segments.append((f'{src}-{body}->{dst}', rel))
+                    segments.append((f'{prefix}{src}-{body}->{dst}', rel))
                 elif rel.get('direction') == 'BOTH':
-                    segments.append((f'{src}-{body}-{dst}', rel))
+                    segments.append((f'{prefix}{src}-{body}-{dst}', rel))
                 else:
                     raise Unsupported('relationship direction')
             for uid, node in nodes.items():
@@ -340,10 +379,21 @@ class Printer:
         if uid in self.alias_of and not is_entity_ref(e):
             return self.dialect.ident(self.alias_of[uid])
         kind = e.get('k')
+        if kind == 'PATH' and uid in getattr(self, 'path_name', {}):
+            return self.dialect.ident(self.path_name[uid])
         if e.get('unsupported'):
             raise Unsupported(f'expression {kind}')
         if is_entity_ref(e):
             return self.dialect.ident(self.entity_name(e['entity']))
+        if kind in ('EQUALS', 'NOT_EQUALS') and len(e.get('children') or []) == 2:
+            # `x = y` compares internal IDs when both sides are entity IDs. If
+            # only one is (e.g. id(k) = id(rel), rel an UNWIND variable), the
+            # bare `k` would compare a relationship with an ID: print id(k).
+            ids = [c.get('k') == 'PROPERTY' and c.get('property') == INTERNAL_ID for c in e['children']]
+            if ids[0] != ids[1]:
+                args = [f'id({self.expr(c)})' if is_id else self.expr(c)
+                        for c, is_id in zip(e['children'], ids)]
+                return self.dialect.function(kind, args, e)
         if kind == 'PROPERTY':
             owner = self.entity_name(e['owner']) if (e['owner'] in self.names or e['owner'] in self.alias_of) \
                 else None

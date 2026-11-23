@@ -75,12 +75,26 @@ BI15_INTERACTION = [
     'MATCH (m1)-[:REPLYOF*0..]->(:POST)<-[:CONTAINEROF]-(forum:FORUM) '
     "RETURN pA.id, pB.id, sum(CASE (label(m1) = 'POST' OR label(m2) = 'POST') WHEN true THEN 1.0 ELSE 0.5 END))",
 ]
+IC5 = [
+    'ALTER TABLE HASMEMBER ADD IF NOT EXISTS postCount INT64 DEFAULT 0',
+    'FILL HASMEMBER(postCount) FROM (MATCH (friend:PERSON)<-[:HASCREATOR]-(post)<-[:CONTAINEROF]-(forum:FORUM) '
+    'WITH forum, friend, count(post) AS postCount MATCH (forum)-[:HASMEMBER]->(friend) '
+    'RETURN forum.id, friend.id, postCount)',
+]
+IC14 = [
+    'ALTER TABLE KNOWS ADD IF NOT EXISTS ic14_weight_v2 DOUBLE DEFAULT 0.0',
+    'FILL KNOWS(ic14_weight_v2) FROM (MATCH (person1:PERSON)-[e:KNOWS]->(person2:PERSON) WITH person1, person2 '
+    'MATCH (person1)<-[:HASCREATOR]-(n:COMMENT:POST)-[:REPLYOF]-(m:COMMENT:POST)-[:HASCREATOR]->(person2) '
+    "RETURN person1.id, person2.id, SUM(CASE n IS NOT NULL WHEN TRUE THEN CASE (label(m) = 'POST' OR "
+    "label(n) = 'POST') WHEN TRUE THEN 1.0 ELSE 0.5 END ELSE 0.0 END))",
+]
 
 
 @unittest.skipUnless(DEFAULT_ENGINE.is_file(), 'needs build/bin/cico_engine')
 class KuzuRewriteSemantics(unittest.TestCase):
-    def middleware(self, schema, statements):
-        mw = IndexMiddleware(ROOT / 'schemas' / f'{schema}.yaml', dialect='kuzu')
+    def middleware(self, schema, statements, constraints=None):
+        mw = IndexMiddleware(ROOT / 'schemas' / f'{schema}.yaml', dialect='kuzu',
+                             constraints=constraints and ROOT / 'constraints' / constraints)
         self.addCleanup(mw.close)
         for statement in statements:
             self.assertTrue(mw.execute(statement).ok, statement)
@@ -201,6 +215,36 @@ class KuzuRewriteSemantics(unittest.TestCase):
         self.assertIn('__neug_fill_state_n_rows_', text)          # group presence
         self.assertNotIn('HASCREATOR', text)
         self.assertTrue(text.rstrip().endswith('SET knows.weight_bi15 = 1.0 / (w + 1.0)'))
+
+    def test_optional_count_over_an_earlier_carrier_edge(self):
+        # LDBC IC5 as written: the HASMEMBER edge is bound by the MATCH, the
+        # post count is OPTIONAL. Declared unique_edge HASMEMBER lets the
+        # retry stage add the edge to the OPTIONAL pattern (relax.py E1).
+        mw = self.middleware('ldbc-ic', IC5, 'ldbc-snb.yaml')
+        result = mw.execute('MATCH (friend:PERSON)<-[membership:HASMEMBER]-(forum:FORUM) '
+                            'OPTIONAL MATCH (friend:PERSON)<-[:HASCREATOR]-(post:POST)<-[:CONTAINEROF]-(forum) '
+                            'WITH forum, count(post) AS postCount RETURN forum.title AS forumName, postCount')
+        self.assertTrue(result.rewritten, result.to_dict())
+        self.assertIn('postCount', result.cypher)
+        self.assertIn('unique_edge: -[:HASMEMBER]-> per ordered pair', result.premises)
+
+    def test_path_edges_read_their_stored_weight(self):
+        # LDBC IC14 shape: UNWIND rels(path), the edge located by id, then a
+        # per-edge OPTIONAL reply weight. Named paths are printed back and a
+        # one-sided internal-id comparison is printed as id(k).
+        mw = self.middleware('ldbc-ic', IC14, 'ldbc-snb.yaml')
+        text = self.rewrite(mw, 'MATCH path = (person1:PERSON {id: 1})-[:KNOWS* ALL SHORTEST 1..]-'
+                                '(person2:PERSON {id: 2}) UNWIND rels(path) AS rel '
+                                'MATCH (s:PERSON)-[k:KNOWS]->(t:PERSON) WHERE id(k) = id(rel) '
+                                'OPTIONAL MATCH (s)<-[:HASCREATOR]-(n:COMMENT:POST)-[:REPLYOF]-(m:COMMENT:POST)'
+                                '-[:HASCREATOR]->(t) WITH nodes(path) AS pathNodes, rels(path) AS pathRels, k, s, t, '
+                                "sum(CASE n IS NOT NULL WHEN TRUE THEN CASE (label(m) = 'POST' OR label(n) = 'POST') "
+                                'WHEN TRUE THEN 1.0 ELSE 0.5 END ELSE 0.0 END) AS edgeWeight '
+                                'RETURN pathNodes, pathRels, sum(edgeWeight) AS pathWeight')
+        self.assertIn('MATCH path = (person1:PERSON)-[', text)
+        self.assertIn('id(k) = ', text)
+        self.assertIn('k.ic14_weight_v2', text)
+        self.assertNotIn('REPLYOF', text)
 
     def test_materialization(self):
         mw = self.middleware('lsqb', Q5)

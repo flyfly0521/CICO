@@ -425,12 +425,17 @@ bool completeKeyGroupInputsAreClosed(
           "+", "-", "*", "/", "%", "LABEL", "STRUCT_EXTRACT", "TIMESTAMP",
           "CAST_TO_INT64", "CAST_TO_DOUBLE", "CAST_TO_STRING", "CAST_TO_DATE",
           "CAST_TO_TIMESTAMP", "CAST_TO_FLOAT", "ROUND", "ABS", "FLOOR", "CEIL",
-          "CEILING", "SIGN"};
+          "CEILING", "SIGN",
+          // Pure list/path functions (e.g. UNWIND rels(path) AS rel, IC14):
+          // their value depends only on their arguments, checked below.
+          "LIST_CREATION", "NODES", "RELS", "LIST_EXTRACT", "SIZE", "LENGTH"};
       if (!deterministic.contains(expression->template constCast<ScalarFunctionExpression>()
                                       .getFunction().name)) return false;
       break;
     }
     case ExpressionType::CASE_ELSE:
+    // A named path is its nodes and relationships (children, checked below).
+    case ExpressionType::PATH:
       break;
     default:
       if (!ExpressionTypeUtil::isBoolean(expression->expressionType) &&

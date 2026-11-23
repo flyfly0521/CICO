@@ -41,3 +41,4 @@ constraints:
   - {kind: required_property, label: Tag, property: name}
   - {kind: required_property, label: Country, property: name}
   - {kind: unique_edge, rel: KNOWS}
+  - {kind: unique_edge, rel: HASMEMBER}                       # a person is a member of a forum at most once

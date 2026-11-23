@@ -93,13 +93,14 @@ class Declarations(unittest.TestCase):
 class SharedConstraints(unittest.TestCase):
     def test_neo4j_translation_preserves_the_legacy_inline_list(self):
         mapping = load_mapping(ROOT / 'profiles/ldbc-snb-neo4j.yaml')
-        self.assertEqual(mapping['constraints'], LEGACY_NEO4J + [{'kind': 'unique_edge', 'rel': 'KNOWS'}])
+        self.assertEqual(mapping['constraints'], LEGACY_NEO4J + [{'kind': 'unique_edge', 'rel': 'KNOWS'},
+                                                       {'kind': 'unique_edge', 'rel': 'HAS_MEMBER'}])
         self.assertEqual(mapping['acyclic_rel_types'], ['REPLY_OF'])
         self.assertNotIn('constraints_file', mapping)
 
     def test_internal_names_and_classes(self):
         c = load_constraints(SHARED)
-        self.assertEqual(len(c.items), 13)
+        self.assertEqual(len(c.items), 14)
         self.assertEqual(c.acyclic, {'REPLYOF'})
         self.assertIsNotNone(c.at_most_one_out('REPLYOF', {'COMMENT'}))
         self.assertIsNone(c.at_most_one_out('REPLYOF', {'FORUM'}))
@@ -119,7 +120,7 @@ class SharedConstraints(unittest.TestCase):
 
     def test_middleware_parameter(self):
         with IndexMiddleware(SCHEMA, dialect='kuzu', constraints=SHARED) as mw:
-            self.assertEqual(len(mw.constraint_checks()), 13)
+            self.assertEqual(len(mw.constraint_checks()), 14)
         with IndexMiddleware(SCHEMA, dialect='kuzu') as mw:
             self.assertEqual(mw.constraint_checks(), [])
 

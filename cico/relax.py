@@ -28,6 +28,15 @@ T1  key identity.  A node (v:T {p: E}) of a mandatory MATCH, E a parameter or
     used in its part only there and as a bare WITH item) or as a separate
     pattern of the clause.  Both k and v are the only C with p = E, so rows
     correspond one to one (the Neo4j T1 argument, neo4j.py `_key_identities`).
+E1  carrier edge in an OPTIONAL MATCH.  A mandatory MATCH bound
+    (s)-[:R]->(t); a later OPTIONAL MATCH of the same scope reads both s and
+    t but not an R edge from s to t.  With R declared unique_edge (at most
+    one R per ordered pair), adding (s)-[:R]->(t) to that OPTIONAL pattern
+    keeps every row: the added edge can only be the one already matched, so
+    the optional pattern matches exactly as often, and null-extends exactly
+    when, it did before.  A relationship FILL keyed by (s, t) then sees its
+    own carrier edge inside the clause it replaces (LDBC IC5: HASMEMBER,
+    IC14: KNOWS).
 T2  key identity of a bound node.  A bare (v) bound by an earlier clause,
     whose incoming relationship in this clause forces class C
     (endpoint_labels) with key p, becomes (k:T) with `k.p = v.p` and a guard
@@ -669,11 +678,52 @@ class InternalRelax:
                 return (pos, end + 1, f'({name}:{_q(table)})'), f'{name}.{_q(prop)} = {_q(var)}.{_q(prop)}{guard}'
         return None
 
+    def optional_carrier_edges(self, tokens, premises):
+        """E1 above.  Adds `, (s)-[:R]->(t)` to OPTIONAL MATCH patterns."""
+        unique = {c.rel.upper(): c for c in self.c.items if c.kind == 'unique_edge' and c.rel}
+        if not unique:
+            return tokens
+        for _ in range(16):                                   # one insertion per pass
+            a = _Analysis(tokens)
+            insertion = None
+            for clause in a.clauses:
+                if not clause.optional or clause.edges is None:
+                    continue
+                bound = {a.binding[pos] for pos, _, _ in clause.nodes if pos in a.binding}
+                present = {(e[0], e[1], e[2]) for e in clause.edges}
+                for earlier in a.clauses[:clause.index]:
+                    if earlier.optional or earlier.edges is None:
+                        continue
+                    for src, rel, dst, _, _ in earlier.edges:
+                        if rel not in unique or src == dst or src not in bound or dst not in bound \
+                                or (src, rel, dst) in present:
+                            continue
+                        s_var, t_var = a.var_of.get(src), a.var_of.get(dst)
+                        if not s_var or not t_var:
+                            continue
+                        insertion = (clause.pattern[1], s_var, unique[rel].rel, t_var, unique[rel])
+                        break
+                    if insertion:
+                        break
+                if insertion:
+                    break
+            if insertion is None:
+                return tokens
+            at, s_var, rel, t_var, constraint = insertion
+            added = tokenize(f', ({_q(s_var)})-[:{_q(rel)}]->({_q(t_var)})')
+            tokens = tokens[:at] + added + tokens[at:]
+            premises.add(constraint.describe())
+        return tokens
+
     def relax(self, tokens, premises):
-        """T1/T2 then R1 (as the Neo4j frontend: key identities first)."""
+        """T1/T2 then R1 (as the Neo4j frontend: key identities first), then E1."""
         if not self.c or not self.c.items:
             return tokens
         try:
-            return self.implied_type_conjuncts(self.key_identities(tokens, premises), premises)
+            tokens = self.implied_type_conjuncts(self.key_identities(tokens, premises), premises)
+        except Unsupported:
+            pass
+        try:
+            return self.optional_carrier_edges(tokens, premises)
         except Unsupported:
             return tokens

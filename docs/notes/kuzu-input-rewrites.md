@@ -67,6 +67,9 @@ Kuzu 不接受的“聚合包着聚合的别名”。
     没有公开 COUNT(*) 列的关系 FILL（如 `bi20_direct = min(...)+1`）的组存在性测试因此能通过验证：bi-20-setup 改写为读 `bi20_direct`
     （BI 17/17，含 setup；用到的索引 75/83）。物化（`cico build`）本来就建这一列。
 
+14. 完整组输入闭包检查的纯函数白名单加入列表/路径函数（LIST_CREATION、NODES、RELS、LIST_EXTRACT、SIZE、LENGTH），
+    PATH 表达式按其节点和关系判断；同一 QueryPart 中改写区域之前的 `UNWIND rels(path) AS rel` 不再整体拒绝（IC14）。
+
 ## 中间件修改
 
 - 部分 QueryPart 已改写、其余未改写时也尝试参数特化（FILL 常按固定窗口建），特化结果改写的段更多才采用。
@@ -76,6 +79,12 @@ Kuzu 不接受的“聚合包着聚合的别名”。
   只在整条语句的最后一个投影里加：Kuzu 不允许再聚合“包着聚合的 WITH 别名”，而逐段改写时后面的段看不到
   （第一版按“同一语句里是否再被聚合”判断，bi-5、bi-6、tcr-9 因此在 Kuzu 上报 nested aggregation，已改）。
 - 打印递归关系谓词 `*l..u (r, n | WHERE …)`（引擎 IR 增加 `inner_rel`/`inner_node`），tcr11 的索引才能在 Kuzu 上物化。
+- 声明约束重试阶段新增 E1（`cico/relax.py`）：前面的必选 MATCH 已绑定 `(s)-[:R]->(t)`、后面的 OPTIONAL MATCH 读 s 和 t，
+  R 声明为 `unique_edge` 时，把 `(s)-[:R]->(t)` 加入该 OPTIONAL 模式（新加的边只能是已匹配的那条，行数与空扩展都不变），
+  以该边为载体的关系 FILL 才能匹配。`constraints/ldbc-snb.yaml` 新增 `unique_edge HASMEMBER`（IC SF1 违反数 0）。
+  **原始** ic5 因此直接改写，手写的 ic5 input 版本已撤下。
+- 打印器：命名路径 `path = (a)-[...]-(b)`（IR 中只在使用处有 PATH 表达式，打印时还原到绑定它的 MATCH）；
+  比较两侧只有一侧是实体内部 ID 时打印 `id(k)`（如 `id(k) = id(rel)`，rel 为 UNWIND 变量）。
 - 物化：REL 组子表 FILL 的 reset 只删自己子表的边（以前删整个组，单独重建一个子表会清掉兄弟 FILL）。
 - `schemas/` 增加 lsqb、finbench、ldbc-ic、hetionet 的目标 schema（测试用）。
 
@@ -86,8 +95,9 @@ ic5 依赖 LDBC 约束“每对 (forum, person) 至多一条 HASMEMBER”，IC S
 
 ## 未完成
 
-- **ic14**：Kuzu 写法用 `list_transform`（NeuG 不支持），而且每条路径边的 OPTIONAL 计数要把 UNWIND 出来的关系当输入列，
-  逐段桩不支持 REL/嵌套列表输入列；需要扩展 `queryparts` 的桩，或在不依赖 `list_transform` 的前提下保证路径节点顺序。
+- ic14 已改写（2026-11-23 后续）：input 版本把每条路径边按 `id(k) = id(rel)` 定位成存储的 KNOWS 边，用一个无向 REPLYOF 的
+  OPTIONAL 计数（与 FILL 同一 CASE 写法），`list_transform` 只留在最后输出；中间件补了上面的 E1、打印器和闭包检查。
+  Kuzu 上编译通过。
 - bi-15/19 setup（2026-11-23 后续）：按用户意见新增一级索引 `NeuG/queries/index/ldbc-bi/bi15u`（`KNOWS.bi15_interaction`，无向
   REPLYOF 上的互动权重和）、`bi19u`（`KNOWS.bi19_interaction_count`），模式与 Kuzu baseline setup 完全相同，CICO 直接改写**原** setup
   的读部分，不再需要按方向拆分的 input 版本（已撤下）和 LDBC 约束；bi-20-setup 读一级索引 `bi20_direct`。

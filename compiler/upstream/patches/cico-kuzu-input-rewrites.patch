@@ -2,7 +2,7 @@
 # complete-group SUM/COUNT reads, OPTIONAL count proofs, REL-group child
 # carriers, direction-aware presence fix, empty-COUNT restoration, real-number
 # floating SUM, predicate-key canonicalization (comparison direction, TIMESTAMP
-# instants), REL aggregate variables, deterministic ROUND/ABS/... anchor-split input guard, readable n_rows state (see
+# instants), REL aggregate variables, deterministic ROUND/ABS/... anchor-split input guard, readable n_rows state, list/path functions and PATH in the input-closure check (see
 # docs/notes/kuzu-input-rewrites.md).
 diff --git a/include/neug/compiler/binder/expression/case_expression.h b/include/neug/compiler/binder/expression/case_expression.h
 index e4d6182..48d3270 100644
@@ -201,7 +201,7 @@ index c52fed6..4856763 100644
      return false;
    const auto& relation = carrier->constCast<RelTableCatalogEntry>();
 diff --git a/src/compiler/binder/rewriter/complete_key_group_rewriter.cpp b/src/compiler/binder/rewriter/complete_key_group_rewriter.cpp
-index 65ba432..dd4bbe9 100644
+index 65ba432..a288ecb 100644
 --- a/src/compiler/binder/rewriter/complete_key_group_rewriter.cpp
 +++ b/src/compiler/binder/rewriter/complete_key_group_rewriter.cpp
 @@ -1,5 +1,6 @@
@@ -256,17 +256,27 @@ index 65ba432..dd4bbe9 100644
  }  // namespace
  
  std::vector<std::shared_ptr<Expression>> guaranteedIncomingNodePredicates(
-@@ -385,7 +424,8 @@ bool completeKeyGroupInputsAreClosed(
+@@ -385,12 +424,18 @@ bool completeKeyGroupInputsAreClosed(
        static const std::set<std::string> deterministic = {
            "+", "-", "*", "/", "%", "LABEL", "STRUCT_EXTRACT", "TIMESTAMP",
            "CAST_TO_INT64", "CAST_TO_DOUBLE", "CAST_TO_STRING", "CAST_TO_DATE",
 -          "CAST_TO_TIMESTAMP"};
 +          "CAST_TO_TIMESTAMP", "CAST_TO_FLOAT", "ROUND", "ABS", "FLOOR", "CEIL",
-+          "CEILING", "SIGN"};
++          "CEILING", "SIGN",
++          // Pure list/path functions (e.g. UNWIND rels(path) AS rel, IC14):
++          // their value depends only on their arguments, checked below.
++          "LIST_CREATION", "NODES", "RELS", "LIST_EXTRACT", "SIZE", "LENGTH"};
        if (!deterministic.contains(expression->template constCast<ScalarFunctionExpression>()
                                        .getFunction().name)) return false;
        break;
-@@ -465,14 +505,22 @@ bool provesCompleteKeyGroupDistinctCounts(
+     }
+     case ExpressionType::CASE_ELSE:
++    // A named path is its nodes and relationships (children, checked below).
++    case ExpressionType::PATH:
+       break;
+     default:
+       if (!ExpressionTypeUtil::isBoolean(expression->expressionType) &&
+@@ -465,14 +510,22 @@ bool provesCompleteKeyGroupDistinctCounts(
    // <window/tag> WITH p, count(DISTINCT m)). Duplicated anchor rows see the
    // same value set, so the caller lowers it with MAX rather than SUM.
    const bool nodeFill = info.getFillType() == FillEntryType::NODE;
@@ -293,7 +303,7 @@ index 65ba432..dd4bbe9 100644
    if (carrier == nullptr || carrier->getType() != (nodeFill ? CatalogEntryType::NODE_TABLE_ENTRY
                                                              : CatalogEntryType::REL_TABLE_ENTRY))
      return false;
-@@ -480,13 +528,22 @@ bool provesCompleteKeyGroupDistinctCounts(
+@@ -480,13 +533,22 @@ bool provesCompleteKeyGroupDistinctCounts(
      return false;
    // Recursive positions are verified against the rebound source below.
    std::vector<std::pair<size_t, RecursiveEdgeContract>> recursiveEdges;
@@ -320,7 +330,7 @@ index 65ba432..dd4bbe9 100644
      const auto& name = query.relsInfo[rel.matchedIdx].uniqName;
      const auto edges = match.getQueryGraphCollection()->getQueryRels();
      const auto actual = std::find_if(edges.begin(), edges.end(),
-@@ -510,7 +567,7 @@ bool provesCompleteKeyGroupDistinctCounts(
+@@ -510,7 +572,7 @@ bool provesCompleteKeyGroupDistinctCounts(
        return false;
      keys.insert(query.nodesInfo[matched.nodesInfo[position->second].matchedIdx].uniqName);
    }
@@ -329,7 +339,7 @@ index 65ba432..dd4bbe9 100644
    std::set<std::string> groupedKeys;
    for (const auto& group : part.getProjectionBody()->getGroupByExpressions()) {
      const auto name = identity(group);
-@@ -519,8 +576,21 @@ bool provesCompleteKeyGroupDistinctCounts(
+@@ -519,8 +581,21 @@ bool provesCompleteKeyGroupDistinctCounts(
    if (groupedKeys != keys) return false;
    const auto aggregates = part.getProjectionBody()->getAggregateExpressions();
    if (aggregates.empty()) return false;
@@ -352,7 +362,7 @@ index 65ba432..dd4bbe9 100644
      if (match.getMatchClauseType() == MatchClauseType::OPTIONAL_MATCH) {
        // A prebound endpoint can remain non-NULL when OPTIONAL has no match.
        // Only a removed witness is guaranteed to contribute zero on that row.
-@@ -539,8 +609,30 @@ bool provesCompleteKeyGroupDistinctCounts(
+@@ -539,8 +614,30 @@ bool provesCompleteKeyGroupDistinctCounts(
      }
      IndexRewriteTemplateMatcher::AggRewriteTargetMap targets;
      if (!IndexRewriteTemplateMatcher::validateAggregateTemplatesForIndexRewrite(
@@ -385,7 +395,7 @@ index 65ba432..dd4bbe9 100644
      const auto position = targets.begin()->second;
      if (position >= info.getTargetColumns().size() ||
          info.getTargetColumns()[position].starts_with(InternalKeyword::FILL_AGGREGATE_STATE_PREFIX) ||
-@@ -552,6 +644,7 @@ bool provesCompleteKeyGroupDistinctCounts(
+@@ -552,6 +649,7 @@ bool provesCompleteKeyGroupDistinctCounts(
    // the complete aggregates proved above may hide their original arguments.
    auto covered = incomingExpressions;
    for (const auto& aggregate : aggregates) covered.insert(aggregate.get());
@@ -393,7 +403,7 @@ index 65ba432..dd4bbe9 100644
    // The per-pair default retains both ordered endpoints; a NODE group keeps
    // exactly its anchor identity and removes every other source binding.
    const std::unordered_set<std::string> retainedKeys(keys.begin(), keys.end());
-@@ -647,7 +740,7 @@ bool provesCompleteKeyGroupDistinctCounts(
+@@ -647,7 +745,7 @@ bool provesCompleteKeyGroupDistinctCounts(
      }
      if (sourceGroups != sourceKeys) return false;
      for (size_t i = keyCount; i < values.size(); ++i)
