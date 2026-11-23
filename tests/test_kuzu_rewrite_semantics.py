@@ -68,6 +68,13 @@ ROOT_POST = [
     'FILL ROOT_POST() FROM (MATCH (post:Post)<-[e:REPLYOF*0..4294967295]-(message:COMMENT:POST) '
     'RETURN DISTINCT message.id, post.id)',
 ]
+BI15_INTERACTION = [
+    'ALTER TABLE KNOWS ADD IF NOT EXISTS bi15_interaction DOUBLE DEFAULT 0.0',
+    'FILL KNOWS(bi15_interaction) FROM (MATCH (pA:PERSON)-[:KNOWS]->(pB:PERSON) WITH pA, pB '
+    'MATCH (pA)<-[:HASCREATOR]-(m1:POST:COMMENT)-[:REPLYOF]-(m2:POST:COMMENT)-[:HASCREATOR]->(pB) '
+    'MATCH (m1)-[:REPLYOF*0..]->(:POST)<-[:CONTAINEROF]-(forum:FORUM) '
+    "RETURN pA.id, pB.id, sum(CASE (label(m1) = 'POST' OR label(m2) = 'POST') WHEN true THEN 1.0 ELSE 0.5 END))",
+]
 
 
 @unittest.skipUnless(DEFAULT_ENGINE.is_file(), 'needs build/bin/cico_engine')
@@ -177,6 +184,23 @@ class KuzuRewriteSemantics(unittest.TestCase):
                             country='India', tagClass='Congressman')
         self.assertIn('ROOT_POST', text)
         self.assertNotIn('WITH DISTINCT message', text)
+
+    def test_weight_setup_reads_a_single_level_index(self):
+        # Kuzu bi-15-setup as written (undirected REPLYOF): the read part is
+        # replaced by the per-pair sum stored in KNOWS.bi15_interaction; only
+        # edges of non-empty groups are written, as in the original.
+        text = self.rewrite(self.middleware('ldbc-bi', BI15_INTERACTION),
+                            'MATCH (pA:PERSON)-[knows:KNOWS]->(pB:PERSON) '
+                            'MATCH (pA)<-[:HASCREATOR]-(m1:POST:COMMENT)-[:REPLYOF]-(m2:POST:COMMENT)'
+                            '-[:HASCREATOR]->(pB) '
+                            'MATCH (m1)-[:REPLYOF*0..]->(:POST)<-[:CONTAINEROF]-(forum:FORUM) '
+                            "WITH knows, sum(CASE (label(m1) = 'POST' OR label(m2) = 'POST') "
+                            'WHEN true THEN 1.0 ELSE 0.5 END) AS w '
+                            'SET knows.weight_bi15 = 1.0 / (w + 1.0)')
+        self.assertIn('knows.bi15_interaction', text)
+        self.assertIn('__neug_fill_state_n_rows_', text)          # group presence
+        self.assertNotIn('HASCREATOR', text)
+        self.assertTrue(text.rstrip().endswith('SET knows.weight_bi15 = 1.0 / (w + 1.0)'))
 
     def test_materialization(self):
         mw = self.middleware('lsqb', Q5)

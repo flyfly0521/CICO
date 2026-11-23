@@ -88,6 +88,9 @@ ic5 依赖 LDBC 约束“每对 (forum, person) 至多一条 HASMEMBER”，IC S
 
 - **ic14**：Kuzu 写法用 `list_transform`（NeuG 不支持），而且每条路径边的 OPTIONAL 计数要把 UNWIND 出来的关系当输入列，
   逐段桩不支持 REL/嵌套列表输入列；需要扩展 `queryparts` 的桩，或在不依赖 `list_transform` 的前提下保证路径节点顺序。
+- bi-15/19 setup（2026-11-23 后续）：按用户意见新增一级索引 `NeuG/queries/index/ldbc-bi/bi15u`（`KNOWS.bi15_interaction`，无向
+  REPLYOF 上的互动权重和）、`bi19u`（`KNOWS.bi19_interaction_count`），模式与 Kuzu baseline setup 完全相同，CICO 直接改写**原** setup
+  的读部分，不再需要按方向拆分的 input 版本（已撤下）和 LDBC 约束；bi-20-setup 读一级索引 `bi20_direct`。
 - 两级权重 FILL（`bi15_weight`、`weight_bi19`、`bi20_weight`：建在其他索引列上的逐边计算）：查询按其源查询形状读索引列时
   RewriterV4 能改写（计算前缀路径），但 Kuzu setup 不读索引列，第一轮改写的输出也不是该形状，需要迭代改写 + 输出规范化。
   `bi15w` ×3 带 forum 时间窗口，Kuzu bi-15 没有窗口，语义不同，不适用。ic14_weight_v2 见上。
