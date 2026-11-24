@@ -5290,10 +5290,8 @@ void RewriterV4::rewriteReferencesFromPreviousQueryPart(
         pos != uniqueNameRewriteMap.end()) {
       const auto replacedUniqueName = expr->getUniqueName();
       for (auto& aggregateExpr : aggregateExprs) {
-        if (!erasedAggregates.contains(aggregateExpr->getUniqueName()) &&
-            (aggregateExpr->getUniqueName() == replacedUniqueName ||
-             pos->second->getUniqueName().find(
-                 aggregateExpr->getUniqueName()) != std::string::npos)) {
+        // A partition input and its enclosing rollup can share a name suffix.
+        if (aggregateExpr->getUniqueName() == replacedUniqueName) {
           erasedAggregates.insert(aggregateExpr->getUniqueName());
         }
       }

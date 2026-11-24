@@ -153,7 +153,9 @@ def _manifest_key(workload, name):
 
 
 def parameters(workload, path, text, sample=0):
-    """Python values for the parameters referenced by `text` (manifest row `sample`)."""
+    """Python values for the parameters referenced by `text` (manifest row
+    `sample`); every value of the row (and the runner defaults) when `text` is
+    None."""
     rw = _runner()
     spec = WORKLOADS[workload]
     values = dict(rw.default_params_for(spec['runner']))
@@ -179,5 +181,7 @@ def parameters(workload, path, text, sample=0):
             for spec_key, value in raw.items():
                 key, _, kind = spec_key.partition(':')
                 values[key] = rw.coerce_value(value, kind or None, key)
+    if text is None:
+        return values
     used = set(re.findall(r'\$([A-Za-z_][A-Za-z0-9_]*)', text))
     return {k: v for k, v in values.items() if k in used}

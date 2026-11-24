@@ -1,5 +1,5 @@
 {
- "files": 977,
+ "files": 978,
  "generated": {
   "generated/include/generated_extension_loader.h": {
    "from": "build/src/compiler/extension/codegen/include/generated_extension_loader.h",
@@ -22,46 +22,87 @@
    "sha256": "a55ebd27360d10e15befe13484e942a5974f707fa62429dd4f3018f83ddb488e"
   }
  },
- "neug_commit": "c88ca1f1fdc67b515440d671892a37c6e5293634",
- "neug_dirty_files": [
-  "include/neug/compiler/catalog/catalog_entry/fill_functional_assumption.h",
-  "include/neug/compiler/planner/join_order/cardinality_estimator.h",
-  "include/neug/compiler/storage/stats_manager.h",
-  "include/neug/execution/expression/special_predicates.h",
-  "src/compiler/binder/bound_statement_rewriter.cpp",
-  "src/compiler/binder/rewriter/CMakeLists.txt",
-  "src/compiler/binder/rewriter/complete_key_group_rewriter.cpp",
-  "src/compiler/binder/rewriter/rewriter_v4.cpp",
-  "src/compiler/catalog/catalog_entry/fill_functional_assumption.cpp",
-  "src/compiler/main/storage_manager.cpp",
-  "src/compiler/planner/execution_cost.cpp",
-  "src/compiler/planner/join_order/cardinality_estimator.cpp",
-  "src/compiler/planner/plan/plan_read.cpp",
-  "src/compiler/planner/plan/plan_subquery.cpp",
-  "src/execution/expression/special_predicates.cc",
-  "src/main/query_processor.cc",
-  "src/storages/graph/property_graph.cc"
- ],
+ "neug_commit": "c988ea9d3fbaaa3bfa1ac5684dff3d615b71ba9e",
+ "neug_dirty_files": [],
  "neug_source": "/mnt/sdb1/feiyang/IncGQ",
- "neug_worktree_diff_sha256": "71efe44cf6d1fe84073de3a07e9ee1c23ef36df4c918e64d2a76123e1c947a0c",
+ "neug_worktree_diff_sha256": null,
  "patched": {
-  "src/compiler/binder/expression/index_predicate_key.cpp": {
-   "git_blob": "ff1203be9b79307c85384cfdac34bebcd1d7cc87",
+  "include/neug/compiler/binder/expression/case_expression.h": {
+   "git_blob": "48d327035960525bf2784e78b7c80d27da8a588f",
    "patches": [
-    "neug-temporal-predicate-keys.patch"
+    "cico-kuzu-input-rewrites.patch"
+   ]
+  },
+  "include/neug/compiler/binder/expression/scalar_function_expression.h": {
+   "git_blob": "6dfddb18976a9da0478b2fe368f072251da23c0c",
+   "patches": [
+    "cico-kuzu-input-rewrites.patch"
+   ]
+  },
+  "src/compiler/binder/bind/bind_graph_pattern.cpp": {
+   "git_blob": "8c00eb2c4da72010cbb47a9d620bd87606daa03c",
+   "patches": [
+    "cico-kuzu-input-rewrites.patch"
+   ]
+  },
+  "src/compiler/binder/binder.cpp": {
+   "git_blob": "c817e1ce007ac7ea93fdff3afd5fe76284124997",
+   "patches": [
+    "cico-kuzu-input-rewrites.patch"
+   ]
+  },
+  "src/compiler/binder/expression/index_predicate_key.cpp": {
+   "git_blob": "e0b283cd0ec55f966b920c0e3d3a2ab03ff045b8",
+   "patches": [
+    "neug-temporal-predicate-keys.patch",
+    "cico-kuzu-input-rewrites.patch"
+   ]
+  },
+  "src/compiler/binder/expression/index_rewrite_template_matcher.cpp": {
+   "git_blob": "461d19507f7b0d6a1247d90e8ab38df01dcf24ec",
+   "patches": [
+    "cico-kuzu-input-rewrites.patch"
+   ]
+  },
+  "src/compiler/binder/rewriter/aggregate_endpoint_set_rewriter.cpp": {
+   "git_blob": "4856763c469258aca33c467d9f5ece0abda7abe7",
+   "patches": [
+    "cico-kuzu-input-rewrites.patch"
    ]
   },
   "src/compiler/binder/rewriter/complete_key_group_rewriter.cpp": {
-   "git_blob": "65ba4328a3a552cfa559256b63e3a0ad7504ed1a",
+   "git_blob": "e4824ab5e4253fe8b8adec5eb44a2523fdb14b8b",
    "patches": [
-    "neug-total-distinct-count.patch"
+    "neug-total-distinct-count.patch",
+    "cico-kuzu-input-rewrites.patch",
+    "cico-neo4j-sum-scalars.patch"
+   ]
+  },
+  "src/compiler/binder/rewriter/distinct_count_partition_normalizer.cpp": {
+   "git_blob": "fc051647243744c7843be01ef23f116961aa208d",
+   "patches": [
+    "cico-kuzu-input-rewrites.patch"
+   ]
+  },
+  "src/compiler/binder/rewriter/partial_count_rewriter.cpp": {
+   "git_blob": "6fce08e6df3cf45805c206c81211f038ea9427a7",
+   "patches": [
+    "cico-kuzu-input-rewrites.patch"
    ]
   },
   "src/compiler/binder/rewriter/rewriter_v4.cpp": {
-   "git_blob": "530311b5ca7a7c15d108053d8764f017e0228176",
+   "git_blob": "655b3e8f32be8db3ecfd58841e2bf10755cdbf53",
    "patches": [
     "neug-rootpost-group-coverage.patch",
-    "neug-unrelated-distinct-count.patch"
+    "neug-unrelated-distinct-count.patch",
+    "cico-kuzu-input-rewrites.patch",
+    "cico-neo4j-sum-scalars.patch"
+   ]
+  },
+  "src/compiler/catalog/catalog_entry/fill_index_aux_info.cpp": {
+   "git_blob": "1481513b4daac71e70b12c98e5c9cfef5a38ad50",
+   "patches": [
+    "cico-kuzu-input-rewrites.patch"
    ]
   }
  },
@@ -722,7 +763,7 @@
   "src/compiler/binder/rewriter/match_clause_pattern_label_rewriter.cpp": "6088b58131f5d41c3854a972760de614c99ff8ead1ab04384b4208e0cc2475e8",
   "src/compiler/binder/rewriter/normalized_query_part_match_rewriter.cpp": "1b656c6be6b80efde20babfa93ae7e0432451c5c7fe566355f4e90badddb8035",
   "src/compiler/binder/rewriter/partial_count_rewriter.cpp": "7076ece65430c17a97ac058ab9c145dbc2fa0c55941161d0e75025df89387a0b",
-  "src/compiler/binder/rewriter/rewriter_v4.cpp": "604b2729b7e97d8e64193b8e11afce3c47514ba1f0c430899e8206e5a2af9a60",
+  "src/compiler/binder/rewriter/rewriter_v4.cpp": "d5b404c803bf7f8ce96e9264f9c3f3278282202f22d69e2ab83112d83872ddeb",
   "src/compiler/binder/rewriter/with_clause_projection_rewriter.cpp": "92e6443a85ada656462a894919e98fd08eb0bc8477ccc6f986257b943483dfea",
   "src/compiler/binder/visitor/confidential_statement_analyzer.cpp": "72c79995e2f596d7d3e569a1a455c51b42a520eb711275f355da24115585197e",
   "src/compiler/binder/visitor/default_type_solver.cpp": "0f0afaa55937d4672a9a001e5e0f22a57409debdb2540c0598a725ad94834075",
@@ -1047,6 +1088,7 @@
   "src/utils/property/column.cc": "cbcba5a62fd8841de40379b5c766a6b5e534450e2f2800b0850f8dd9cbff938f",
   "src/utils/property/property.cc": "9cd97002a63602b60d9493e4f3216656fe49b06e0670d54a7b1f3e37aa11c99f",
   "src/utils/property/table.cc": "745578d7c43c225169af888039d4f5f79d7594fb12106fdc83bd4434085ce339",
+  "src/utils/property/types.cc": "70237163a96720719fb59aebac44ece4a20cabbfce650b7e5f708d7b80acd9c3",
   "src/utils/reader/dataset_builder.cc": "636b02bc2f949f73dc720987b7b1fc9479acb1e7db9aeb572b68d4d490fa1d77",
   "src/utils/reader/expression_converter.cc": "c6ede28693e4d6d77e79c736654980e6b010c75707ac012d78a446e5fbd46850",
   "src/utils/reader/options.cc": "30611e70b80945b4d7e42b0b531256e48fa69b3884fb07b1ceb3bc6d66862e71",
@@ -1072,6 +1114,7 @@
   "utf8proc"
  ],
  "third_party_seen": [
+  "HowardHinnant",
   "abseil-cpp",
   "antlr4_cypher",
   "antlr4_runtime",

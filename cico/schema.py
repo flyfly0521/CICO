@@ -74,8 +74,14 @@ def _split_top(text):
 
 def _normalize(node):
     """Storage-side graph.yaml spells string types `varchar`; the compiler
-    metadata (and the engine) read `var_char`."""
+    metadata (and the engine) read `var_char`.  An import config may spell a
+    temporal type `timestamp`: NeuG reads it as `datetime` (both are
+    kTimestampMs, written back as `datetime`, utils/property/types.h), while
+    the compiler metadata would read TIMESTAMP64."""
     if isinstance(node, dict):
+        if set(node) == {'temporal'} and isinstance(node['temporal'], dict) \
+                and set(node['temporal']) == {'timestamp'}:
+            return {'temporal': {'datetime': ''}}
         return {('var_char' if k == 'varchar' else k): _normalize(v) for k, v in node.items()}
     if isinstance(node, list):
         return [_normalize(v) for v in node]
