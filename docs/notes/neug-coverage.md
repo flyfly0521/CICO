@@ -81,3 +81,12 @@ input 中没有改写的 15 条：
 
 两组都没读到的 25 个索引：bi14 系列 ×8、bi15/bi15u/bi15w ×5、bi19 ×2、bi20 ×2、BI4_MESSAGE_COUNT、PERSON(likeCount)；
 q2 ×2；tcr9TransferIn（与 tcr6TransferIn 定义相同，tcr-9 读的是后者）、tsr2TransferIn（tsr-2 只读到了出边那一组）、tcr10 ×2。
+
+## NeuG rewrite（`NeuG/queries/rewrite`）
+
+`NeuG/queries/rewrite/` 是从 optimized 中挑出的两类查询，按原相对路径复制，optimized 本身不动：
+与 baseline 文本相同的 25 条，以及不读物化结果的其他图模式写法 29 条。筛选规则和清单见该目录的 README，分类脚本为
+`cico_work/tools/classify_opt.py`。Kuzu、Neo4j 的 optimized 全部手写读取物化结果，没有符合条件的查询。
+
+`tests/neug_coverage.py --query-set rewrite`（结果 `cico_work/cov_neug_rewrite_a.*`）：**49/54** 改写成功，读到 54/85 个索引。
+未改写的 5 条中，ic12、q3、q9 没有索引；有索引而没有匹配上的只有 bi14a 和 q2。
