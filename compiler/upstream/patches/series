@@ -4,3 +4,4 @@ neug-unrelated-distinct-count.patch
 neug-temporal-predicate-keys.patch
 neug-total-distinct-count.patch
 cico-kuzu-input-rewrites.patch
+cico-neo4j-sum-scalars.patch

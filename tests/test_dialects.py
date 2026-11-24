@@ -45,8 +45,10 @@ class Declarations(unittest.TestCase):
     def test_rules_follow_hooks_and_semantics(self):
         # Rules are shared; each declaration's set is derived, not listed.
         neo4j = get_profile('neo4j')
-        self.assertEqual(neo4j.rules, frozenset({'scalar_regions', 'edge_carriers', 'constraint_retry',
-                                                 'path_carriers', 'distinct_partitions'}))
+        # rel_projections: its statements match one relationship, where
+        # isomorphism and homomorphism agree (profiles.py).
+        self.assertEqual(neo4j.rules, frozenset({'scalar_regions', 'edge_carriers', 'rel_projections',
+                                                 'constraint_retry', 'path_carriers', 'distinct_partitions'}))
         with IndexMiddleware(SCHEMA, dialect='kuzu', constraints=SHARED) as mw:
             self.assertEqual(mw.profile.rules, frozenset({'scalar_regions', 'edge_carriers',
                                                           'rel_projections', 'constraint_retry'}))

@@ -1,0 +1,108 @@
+# CICO development 2026-11-23..24 on develop (uncommitted at 47f09c7): Neo4j
+# frontend sums (Neo4j sum() of no values is 0, read internally as
+# CASE WHEN sum(x) IS NOT NULL THEN sum(x) ELSE 0 END): a projected scalar over
+# the part's own aggregates is validated aggregate by aggregate, a copy of a
+# covered aggregate counts as covered, CAST is deterministic in the
+# complete-group input-closure check. See docs/notes/neo4j-input-rewrites.md.
+diff --git a/src/compiler/binder/rewriter/complete_key_group_rewriter.cpp b/src/compiler/binder/rewriter/complete_key_group_rewriter.cpp
+index a288ecb..e4824ab 100644
+--- a/src/compiler/binder/rewriter/complete_key_group_rewriter.cpp
++++ b/src/compiler/binder/rewriter/complete_key_group_rewriter.cpp
+@@ -379,6 +379,11 @@ bool completeKeyGroupInputsAreClosed(
+                             info.getPredicateTemplates().end(), *key) !=
+                       info.getPredicateTemplates().end();
+   };
++  std::unordered_set<std::string> coveredAggregateNames;
++  if (coveredExpressions != nullptr)
++    for (const auto* covered : *coveredExpressions)
++      if (covered != nullptr && covered->expressionType == ExpressionType::AGGREGATE_FUNCTION)
++        coveredAggregateNames.insert(covered->getUniqueName());
+   std::function<bool(const std::shared_ptr<Expression>&, bool)> independent =
+       [&](const auto& expression, bool currentMatchPredicate) {
+     if (!expression) return true;
+@@ -388,6 +393,13 @@ bool completeKeyGroupInputsAreClosed(
+     // prove their whole aggregate templates and use the default mode below.
+     if (coveredExpressions != nullptr && coveredExpressions->contains(expression.get()))
+       return true;
++    // A projection may hold its own copy of a covered aggregate (e.g. the SUM
++    // inside CASE WHEN sum(x) IS NOT NULL THEN sum(x) ELSE 0 END); the binder
++    // gives both the same unique name, and the replacement rewrites both.
++    if (coveredExpressions != nullptr &&
++        expression->expressionType == ExpressionType::AGGREGATE_FUNCTION &&
++        coveredAggregateNames.contains(expression->getUniqueName()))
++      return true;
+     switch (expression->expressionType) {
+     case ExpressionType::AGGREGATE_FUNCTION:
+       // The caller separately proves these exact aggregate templates. Their
+@@ -424,7 +436,7 @@ bool completeKeyGroupInputsAreClosed(
+       static const std::set<std::string> deterministic = {
+           "+", "-", "*", "/", "%", "LABEL", "STRUCT_EXTRACT", "TIMESTAMP",
+           "CAST_TO_INT64", "CAST_TO_DOUBLE", "CAST_TO_STRING", "CAST_TO_DATE",
+-          "CAST_TO_TIMESTAMP", "CAST_TO_FLOAT", "ROUND", "ABS", "FLOOR", "CEIL",
++          "CAST_TO_TIMESTAMP", "CAST_TO_FLOAT", "CAST", "ROUND", "ABS", "FLOOR", "CEIL",
+           "CEILING", "SIGN",
+           // Pure list/path functions (e.g. UNWIND rels(path) AS rel, IC14):
+           // their value depends only on their arguments, checked below.
+diff --git a/src/compiler/binder/rewriter/rewriter_v4.cpp b/src/compiler/binder/rewriter/rewriter_v4.cpp
+index cdde497..1d7e3b5 100644
+--- a/src/compiler/binder/rewriter/rewriter_v4.cpp
++++ b/src/compiler/binder/rewriter/rewriter_v4.cpp
+@@ -3409,12 +3409,47 @@ bool RewriterV4::validateRewriteCandidate(
+     }
+   }
+   auto* projectionBody = queryPart.getProjectionBodyUnsafe();
++  // A scalar over this part's own aggregates (e.g. CASE WHEN sum(x) IS NOT
++  // NULL THEN sum(x) ELSE 0 END, the Neo4j frontend's sum): the aggregates
++  // are validated and registered one by one below, and the replacement
++  // rewrites them inside the scalar. Outside them, the scalar may only read
++  // what survives the rewrite, as for the post-aggregation predicate above.
++  std::unordered_set<std::string> partAggregates;
++  for (const auto& aggregate : projectionBody->getAggregateExpressions())
++    partAggregates.insert(aggregate->getUniqueName());
++  const auto scalarOverOwnAggregates = [&](const std::shared_ptr<Expression>& expression) {
++    if (!expression || expression->expressionType == ExpressionType::AGGREGATE_FUNCTION) return false;
++    bool sawAggregate = false;
++    expression_vector reads;
++    std::function<void(const std::shared_ptr<Expression>&)> collect =
++        [&](const std::shared_ptr<Expression>& e) {
++      if (!e) return;
++      if (partAggregates.contains(e->getUniqueName())) {
++        sawAggregate = true;
++        return;
++      }
++      if (e->expressionType == ExpressionType::AGGREGATE_FUNCTION ||
++          e->expressionType == ExpressionType::SUBQUERY ||
++          e->expressionType == ExpressionType::PROPERTY) {
++        reads.push_back(e);
++        return;
++      }
++      for (const auto& child : ExpressionChildrenCollector::collectChildren(*e)) collect(child);
++    };
++    collect(expression);
++    if (!sawAggregate) return false;
++    for (const auto& read : reads)
++      if (!validatePropertyCoverageForIndexRewrite(read, nodesIR, indexInfo, indexIR,
++              &retained.nodeUniqueNames, &retained.relUniqueNames)) return false;
++    return true;
++  };
+   std::unordered_set<std::string> projectedAggregateNames;
+   for (auto& expr : projectionBody->getProjectionExpressions()) {
+     collectAggregateUniqueNames(expr, projectedAggregateNames);
+     if (!validateProjectionExpressionForIndexRewrite(
+             expr, matchClause, nodesIR, indexInfo, indexIR,
+-            &retained.nodeUniqueNames, &retained.relUniqueNames)) {
++            &retained.nodeUniqueNames, &retained.relUniqueNames) &&
++        !scalarOverOwnAggregates(expr)) {
+       return false;
+     }
+   }
+@@ -3423,7 +3458,8 @@ bool RewriterV4::validateRewriteCandidate(
+     for (const auto& expr : expressions) {
+       if (!validateProjectionExpressionForIndexRewrite(
+               expr, matchClause, nodesIR, indexInfo, indexIR,
+-              &retained.nodeUniqueNames, &retained.relUniqueNames)) return false;
++              &retained.nodeUniqueNames, &retained.relUniqueNames) &&
++          !scalarOverOwnAggregates(expr)) return false;
+     }
+   }
+   // An aggregate inside a registered finalizer target (a projected scalar

@@ -123,6 +123,11 @@ class Dialect:
         """Unweighted (ALL) SHORTEST recursive relationship (Kuzu/NeuG syntax)."""
         return f"* {'ALL SHORTEST' if all_paths else 'SHORTEST'} {self.var_length(lower, upper)[1:]}"
 
+    def shortest_function(self, all_paths):
+        """Name of a path function wrapping a shortest-path pattern (Neo4j
+        `shortestPath(...)`), or None when shortest_length() spells it."""
+        return None
+
     # ------------------------------------------- hooks of shared rules
     edge_orientation = 'directed_optional_matches'
 

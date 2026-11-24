@@ -549,13 +549,27 @@ class IndexMiddleware:
         """Ordinary pipeline; then, only if it leaves the statement unchanged,
         constraint-backed fallbacks.  Declared constraints a rewrite relied on
         are listed in Result.premises (a superset: probes count as well)."""
+        embedded = getattr(self.frontend, 'embedded_queries', None)
+        found = embedded(cypher) if embedded is not None else None
+        if found is not None:
+            return self._rewrite_embedded(cypher, *found, parameters, parameter_types)
+        union = queryparts.split_union(strip_comments(cypher))
+        if union is not None:
+            return self._rewrite_union(cypher, *union, parameters, parameter_types)
         if hasattr(self.frontend, 'premises'):
             self.frontend.premises = set()
         result = self._rewrite_once(cypher, parameters, parameter_types)
-        if not result.rewritten and self.profile.enabled('constraint_retry'):
+        # Some QueryParts rewritten, others not: the constraint-backed stage
+        # may rewrite more of them; it is taken only if it does.
+        partial = result.rewritten and bool(
+            re.search(r'part \d+: (no_index_selected|engine_error)', result.detail or ''))
+        if (not result.rewritten or partial) and self.profile.enabled('constraint_retry'):
             if not self.engine.alive():
                 self._restart_engine()     # the ordinary attempt may have hit the memory cap
-            result = self._relaxed(cypher, parameters, parameter_types) or result
+            relaxed = self._relaxed(cypher, parameters, parameter_types)
+            if relaxed is not None and (not result.rewritten
+                                        or len(relaxed.parts or []) > len(result.parts or [])):
+                result = relaxed
         if not result.rewritten and self.profile.enabled('path_carriers'):
             if not self.engine.alive():
                 self._restart_engine()
@@ -563,6 +577,72 @@ class IndexMiddleware:
         if result.rewritten and getattr(self.frontend, 'premises', None):
             result.premises = sorted(set(result.premises) | self.frontend.premises)
         return result
+
+    def _rewrite_union(self, cypher, branches, separators, parameters, parameter_types):
+        """UNION [ALL]: rewrite every branch as a statement of its own (each
+        with its own verification guard) and join them with the original
+        separators.  The output columns of a branch are unchanged by its
+        rewrite, so the branches still agree on their columns."""
+        results = []
+        for branch in branches:
+            used = {k: v for k, v in (parameters or {}).items() if '$' + k in branch} if parameters else parameters
+            types = {k: v for k, v in parameter_types.items() if '$' + k in branch} \
+                if parameter_types else parameter_types
+            results.append(self.rewrite(branch, used, types))
+        if not any(r.rewritten for r in results):
+            best = min(results, key=self._rank)
+            notes = ' | '.join(f'branch {n}: {r.reason} {r.detail}'.strip() for n, r in enumerate(results, 1))
+            return self._fallback(cypher, best.reason, notes)
+        text = results[0].cypher if results[0].rewritten else branches[0]
+        for separator, branch, r in zip(separators, branches[1:], results[1:]):
+            text += f'\n{separator}\n' + (r.cypher if r.rewritten else branch)
+        done = [n for n, r in enumerate(results, 1) if r.rewritten]
+        merged = Result('query', cypher=text, original=cypher, rewritten=True, reason='rewritten',
+                        route=':'.join(['union'] + [f'branch{n}:{results[n - 1].route}' for n in done]),
+                        detail=' | '.join(f'branch {n}: {r.reason} {r.detail}'.strip()
+                                          for n, r in enumerate(results, 1) if not r.rewritten or r.detail),
+                        columns=results[done[0] - 1].columns)
+        for r in results:
+            if r.rewritten:
+                merged.indexes = sorted(set(merged.indexes) | set(r.indexes))
+                merged.proofs.extend(r.proofs)
+                merged.premises = sorted(set(merged.premises) | set(r.premises))
+                merged.specialized = sorted(set(merged.specialized) | set(r.specialized))
+        return merged
+
+    def _rewrite_embedded(self, cypher, tokens, queries, parameters, parameter_types):
+        """Queries a procedure runs from string arguments (frontend
+        embedded_queries, e.g. a GDS Cypher projection): rewrite each as a
+        statement of its own, with its own verification guard, under the
+        parameters the procedure passes it, and put the rewritten text back
+        into its string literal.  The rest of the statement is unchanged."""
+        results, replacements = [], {}
+        for position, text, mapping in queries:
+            used = {inner: parameters[outer] for inner, outer in mapping.items()
+                    if parameters and outer in parameters and '$' + inner in text}
+            types = {inner: parameter_types[outer] for inner, outer in mapping.items()
+                     if parameter_types and outer in parameter_types and '$' + inner in text}
+            r = self.rewrite(text, used or None, types or None)
+            results.append(r)
+            if r.rewritten:
+                replacements[position] = r.cypher
+        if not replacements:
+            best = min(results, key=self._rank)
+            notes = ' | '.join(f'query {n}: {r.reason} {r.detail}'.strip() for n, r in enumerate(results, 1))
+            return self._fallback(cypher, best.reason, notes)
+        done = [n for n, r in enumerate(results, 1) if r.rewritten]
+        merged = Result('query', cypher=self.frontend.splice(tokens, replacements), original=cypher,
+                        rewritten=True, reason='rewritten',
+                        route=':'.join(['embedded'] + [f'query{n}:{results[n - 1].route}' for n in done]),
+                        detail=' | '.join(f'query {n}: {r.reason} {r.detail}'.strip()
+                                          for n, r in enumerate(results, 1) if not r.rewritten or r.detail))
+        for r in results:
+            if r.rewritten:
+                merged.indexes = sorted(set(merged.indexes) | set(r.indexes))
+                merged.proofs.extend(r.proofs)
+                merged.premises = sorted(set(merged.premises) | set(r.premises))
+                merged.specialized = sorted(set(merged.specialized) | set(r.specialized))
+        return merged
 
     def _relaxed(self, cypher, parameters, parameter_types):
         """Retry with constraint-implied simplifications in the frontend
@@ -916,6 +996,26 @@ class IndexMiddleware:
                       detail=' | '.join(notes), indexes=sorted(indexes), parts=rewritten,
                       route='parts:' + ','.join(map(str, rewritten)), proofs=proofs, premises=sorted(premises))
 
+    def _label_untyped_nodes(self, columns, names, part):
+        """A node column the binder types without tables (e.g. UNWIND
+        nodes(path)) gets the tables of the labels its own QueryPart filters
+        it by in a mandatory MATCH (queryparts.mandatory_node_labels)."""
+        out = []
+        for (bound, type_text), name in zip(columns, names):
+            if type_text == 'NODE':
+                labels = queryparts.mandatory_node_labels(part, name)
+                typed = getattr(self.frontend, 'typed', {}) or {}
+                if labels and not any(label in typed for label in labels):
+                    tables_for = getattr(self.frontend, '_tables_for', None)
+                    try:
+                        tables = sorted(tables_for(labels)[0]) if tables_for else labels
+                    except Unsupported:
+                        tables = []
+                    if tables:
+                        type_text = f"NODE(LABELS({','.join(tables)}))"
+            out.append([bound, type_text])
+        return out
+
     def _rank(self, result):
         reason = result.reason.split(':')[0]
         return self.REASON_RANK.index(reason) if reason in self.REASON_RANK else len(self.REASON_RANK)
@@ -944,6 +1044,7 @@ class IndexMiddleware:
                         raise
                     raise Unsupported('an earlier QueryPart is not convertible: NeuG: '
                                       + error.response.get('error', '')) from None
+                columns = self._label_untyped_nodes(columns, names, parts[i - 1])
                 reserved = set(types) | set(inline or {}) | parameter_names(tokenize(parts[i]))
                 stub, stub_types = queryparts.stub(columns, self.profile.dialect, names, reserved)
             except (Unsupported, EngineError) as error:
@@ -963,11 +1064,27 @@ class IndexMiddleware:
             return self._fallback(parts[i], 'part_context_changed', 'rewritten probe lost its part')
         # The stub and the trailing RETURN are context, not part of the rewrite:
         # they must print exactly as the probe without indexes does.
-        try:
+        def print_baseline():
             internal = self._to_internal(probe, inline)
-            baseline = self.printer.print(self.engine.bind(internal, probe_types)['ir']).parts
+            return self.printer.print(self.engine.bind(internal, probe_types)['ir']).parts
+        try:
+            baseline = print_baseline()
         except (Unsupported, EngineError, KeyError, TypeError, IndexError) as error:
-            return self._fallback(parts[i], 'part_context_changed', f'baseline probe: {error}'[:300])
+            # Only the stub and the tail are compared below; the relax stage
+            # changes neither, but may give the body a form the target
+            # dialect cannot print (e.g. a re-anchored root path).  Print the
+            # baseline from the ordinary translation then.
+            baseline = None
+            if getattr(self.frontend, 'relax', False):
+                self.frontend.relax = False
+                try:
+                    baseline = print_baseline()
+                except (Unsupported, EngineError, KeyError, TypeError, IndexError):
+                    baseline = None
+                finally:
+                    self.frontend.relax = True
+            if baseline is None:
+                return self._fallback(parts[i], 'part_context_changed', f'baseline probe: {error}'[:300])
         lead = ''
         if head and printed[0] != baseline[0]:
             # A pattern fully covered by the index and anchored on input

@@ -1,4 +1,4 @@
-"""Rewrite coverage of the Kuzu *optimized* query set with the NeuG indexes.
+"""Rewrite coverage of the baseline queries with the NeuG indexes.
 
 For each workload, one middleware session (dialect kuzu):
 
@@ -8,14 +8,22 @@ For each workload, one middleware session (dialect kuzu):
    derived the way the Kuzu parameter scripts derive their windows);
    DROP statements (rebuild hygiene) and write statements (zero resets) are
    skipped, every FILL / ALTER ADD / CREATE REL TABLE is sent to CICO;
-2. rewrite every query of `Kuzu/queries/optimized/<workload>/` and, for the
-   same file name, `Kuzu/queries/baseline/<workload>/` (with the CICO
-   docs Kuzu/queries/input version when present, as in workload_coverage.py), parameters = sample 0;
+2. rewrite every query of `Kuzu/queries/baseline/<workload>/` (the docs
+   Kuzu/queries/input version when present, as in workload_coverage.py) and
+   its setup, parameters = sample 0 (the optimized file of the same name, if
+   any, is reported as well);
 3. for BI, check the windowed and staged weight setups and rerun overlapping
    FILL definitions in private catalogs. Count resulting baseline rewrites
    separately from the already optimized queries.
 
   python3 tests/kuzu_optimized_coverage.py --output cov.json [--workloads ldbc-bi ...]
+  python3 tests/kuzu_optimized_coverage.py --system neo4j --output cov.json
+
+With --system neo4j the same NeuG indexes are registered in a Neo4j profile
+(schema mapping profiles/<workload>-neo4j.yaml, shared constraints) and the
+Neo4j/queries/{optimized,baseline,input} files are rewritten; in step 3 the
+windowed setup is the Neo4j bi-15 projection (input bi-15-create-graph) and
+the staged weights are input/ldbc-bi/weights/*-create-graph.cypher.
 """
 import argparse
 import collections
@@ -34,6 +42,22 @@ import workloads as W  # noqa: E402
 CONSTRAINTS = Path(__file__).resolve().parents[1] / 'constraints'
 DROP = re.compile(r'^\s*(DROP\s+TABLE|ALTER\s+TABLE\s+\S+\s+DROP)\b', re.I)
 DAY = datetime.timedelta(days=1)
+SYSTEM = 'kuzu'                         # set by main(); 'kuzu' or 'neo4j'
+
+
+def system_dir():
+    return W.SYSTEM_DIRS[SYSTEM]
+
+
+def new_middleware(workload, scope='part'):
+    """A middleware session for SYSTEM on the workload's target schema."""
+    if SYSTEM == 'neo4j':
+        from cico.neo4j import neo4j_profile
+        constraints = constraints_for(workload)
+        return IndexMiddleware(W.schema_path(workload),
+                               profile=neo4j_profile(W.mapping_path(workload), constraints), scope=scope)
+    return IndexMiddleware(W.schema_path(workload), dialect='kuzu', constraints=constraints_for(workload),
+                           scope=scope)
 
 
 def constraints_for(workload):
@@ -58,7 +82,7 @@ def owner_key(workload, key):
 
 
 def baseline_file(workload, name):
-    path = W.DOCS / 'Kuzu/queries/baseline' / workload / f'{name}.cypher'
+    path = W.DOCS / system_dir() / 'queries/baseline' / workload / f'{name}.cypher'
     return W.input_file(path) or path
 
 
@@ -70,7 +94,7 @@ def index_parameters(workload, key):
     """Values for a NeuG parameter.cypher, from sample 0 of the owning query
     (same derivation as the Kuzu parameter scripts)."""
     name = {'ldbc-bi': lambda k: 'bi-' + k[2:]}.get(workload, lambda k: k)(owner_key(workload, key))
-    path = W.DOCS / 'Kuzu/queries/baseline' / workload / f'{name}.cypher'
+    path = W.DOCS / system_dir() / 'queries/baseline' / workload / f'{name}.cypher'
     if key == 'bi15w':
         # The shortest-path query reads a precomputed weight, so its text
         # does not mention the dates needed to build the index.
@@ -168,12 +192,17 @@ def register_indexes(mw, workload, keys=None):
 
 
 def setup_file(workload, name):
-    """<name>-setup.cypher of a baseline query (input version when present)."""
-    path = W.DOCS / 'Kuzu/queries/baseline' / workload / f'{name}-setup.cypher'
-    edited = W.input_dir('kuzu', workload) / path.name
-    if W.USE_INPUT and edited.is_file():
-        return edited
-    return path if path.is_file() else None
+    """The setup of a baseline query (input version when present): Kuzu
+    <name>-setup.cypher; Neo4j <name>-project-graph / -create-graph (GDS)."""
+    suffixes = ['setup'] if SYSTEM == 'kuzu' else ['setup', 'project-graph', 'create-graph']
+    for suffix in suffixes:
+        path = W.DOCS / system_dir() / 'queries/baseline' / workload / f'{name}-{suffix}.cypher'
+        edited = W.input_dir(SYSTEM, workload) / path.name
+        if W.USE_INPUT and edited.is_file():
+            return edited
+        if path.is_file():
+            return path
+    return None
 
 
 def rewrite_setup(mw, path, parameters=None):
@@ -201,13 +230,17 @@ def bi_index_coverage(mw, indexes, queries, scope):
     staged = []
     shifted_window = None
     if W.USE_INPUT:
-        inputs = W.input_dir('kuzu', workload)
+        inputs = W.input_dir(SYSTEM, workload)
         window = inputs / 'windowed/bi-15-windowed-setup.cypher'
+        if SYSTEM == 'neo4j':
+            # The Neo4j bi-15 projection is itself windowed (LDBC reference).
+            window = setup_file(workload, 'bi-15') or window
         if window.is_file():
             params = index_parameters(workload, 'bi15w')[1]
             staged.append(rewrite_setup(mw, window, params))
             shifted_window = rewrite_setup(mw, window, {**params, 'endDate': params['endDate'] + DAY})
-        staged.extend(rewrite_setup(mw, path) for path in sorted((inputs / 'weights').glob('*-setup.cypher')))
+        pattern = '*-setup.cypher' if SYSTEM == 'kuzu' else '*-create-graph.cypher'   # Neo4j: GDS projections
+        staged.extend(rewrite_setup(mw, path) for path in sorted((inputs / 'weights').glob(pattern)))
         used.update(i for result in staged for i in result['indexes'])
 
     # These equivalent candidates can win the same QueryPart. Remove the
@@ -226,8 +259,7 @@ def bi_index_coverage(mw, indexes, queries, scope):
     isolated = []
     for key in ('bi3', 'bi9', 'bi14'):
         name = 'bi-' + key[2:]
-        with IndexMiddleware(W.schema_path(workload), dialect='kuzu', constraints=constraints_for(workload),
-                             scope=scope) as local:
+        with new_middleware(workload, scope) as local:
             definitions = register_indexes(local, workload, {key})
             result = baseline(local, name)
         isolated.append(dict(case=name, registration=definitions, result=result))
@@ -242,12 +274,17 @@ def bi_index_coverage(mw, indexes, queries, scope):
 
 def run(workload, scope):
     out = dict(workload=workload, indexes=[], queries=[])
-    with IndexMiddleware(W.schema_path(workload), dialect='kuzu', constraints=constraints_for(workload),
-                         scope=scope) as mw:
+    with new_middleware(workload, scope) as mw:
         out['indexes'] = register_indexes(mw, workload)
-        root = W.DOCS / 'Kuzu/queries/optimized' / workload
-        for path in sorted(root.glob('*.cypher')):
-            name = path.stem
+        # The query set is every baseline query of the system (setup and graph
+        # projection scripts belong to their query); the input version is used
+        # when present. The optimized file of the same name is checked too.
+        root = W.DOCS / system_dir() / 'queries/baseline' / workload
+        for base in sorted(root.glob('*.cypher')):
+            if W.SKIP.search(base.name) or 'project-graph' in base.name:
+                continue
+            name = base.stem
+            path = W.DOCS / system_dir() / 'queries/optimized' / workload / f'{name}.cypher'
             row = dict(query=name, key=index_key(workload, name))
             for variant, file in (('optimized', path), ('baseline', baseline_file(workload, name))):
                 if not file.is_file():
@@ -263,7 +300,7 @@ def run(workload, scope):
                 row[variant]['file'] = str(file)
             setup = setup_file(workload, name)
             if setup is not None:
-                row['setup'] = rewrite_setup(mw, setup)
+                row['setup'] = rewrite_setup(mw, setup, query_params(workload, setup) or None)
             out['queries'].append(row)
         if workload == 'ldbc-bi':
             out['bi_index_coverage'] = bi_index_coverage(mw, out['indexes'], out['queries'], scope)
@@ -306,7 +343,7 @@ def summarize(report):
                 lines.append(f'   {"":24} setup {Path(st["file"]).parent.parent.name}/{Path(st["file"]).name}: '
                              f'{"rewritten" if st["rewritten"] else "not rewritten"} '
                              f'[{", ".join(x["reason"] for x in st["statements"])}] {",".join(st["indexes"])[:80]}')
-        if w == 'ldbc-bi':
+        if w == 'ldbc-bi' and 'bi_index_coverage' in res:
             bi = res['bi_index_coverage']
             used.update(bi['covered'])
             lines.append(f'   original and setup rewrites in the combined catalog '
@@ -331,8 +368,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--workloads', nargs='*', default=list(W.WORKLOADS))
     parser.add_argument('--scope', default='part', choices=['part', 'query'])
+    parser.add_argument('--system', default='kuzu', choices=['kuzu', 'neo4j'])
     parser.add_argument('--output', required=True)
     args = parser.parse_args(argv)
+    global SYSTEM
+    SYSTEM = args.system
     report = [run(w, args.scope) for w in args.workloads]
     json.dump(report, open(args.output, 'w'), indent=1, ensure_ascii=False, default=str)
     text = summarize(report)

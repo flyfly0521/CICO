@@ -64,10 +64,11 @@ RULES = {r.name: r for r in (
     Rule('edge_carriers',
          'OPTIONAL existence part read from a relationship count carrier (edge_carriers.py)',
          hooks=('dialect.edge_carrier_test', 'frontend.rel_tables')),
+    # The rule only rewrites a statement whose first QueryPart matches ONE
+    # relationship (rel_projections._edge) and whose later parts read
+    # nothing, so relationship isomorphism (Neo4j) and homomorphism agree.
     Rule('rel_projections',
          'deterministic edge projections read from a total relationship FILL',
-         applies=lambda s: s.relationship_uniqueness == 'homomorphism',
-         premise="relationship_uniqueness == 'homomorphism'",
          constraints=True),
     Rule('constraint_retry',
          'retry with declared-constraint simplifications: implied type classes, key identities, '

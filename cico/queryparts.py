@@ -51,6 +51,28 @@ def _top_level(tokens):
     return out
 
 
+def split_union(text):
+    """`q1 UNION [ALL] q2 ...` -> ([branch texts], [separator texts]), or None
+    without a top-level UNION.  Each branch is a query on its own: rewriting
+    the branches separately and joining them with the same separators keeps
+    the statement's meaning (its result is the union of the branch results)."""
+    tokenize, render = _tok()
+    tokens = tokenize(text.strip().rstrip(';'))
+    cuts = [i for i, w in _top_level(tokens) if w == 'UNION']
+    if not cuts:
+        return None
+    branches, separators, start = [], [], 0
+    for i in cuts:
+        end = i + 2 if i + 1 < len(tokens) and tokens[i + 1].kind == 'ident' and tokens[i + 1].upper == 'ALL' else i + 1
+        branches.append(render(tokens[start:i]).strip())
+        separators.append(' '.join(t.text.upper() for t in tokens[i:end]))
+        start = end
+    branches.append(render(tokens[start:]).strip())
+    if not all(branches):
+        return None
+    return branches, separators
+
+
 def split_parts(text):
     """Source text -> [part text] (comments must already be stripped), or
     None when the statement is outside the supported shape (UNION, CALL,
@@ -215,6 +237,86 @@ def stub(columns, dialect, names, reserved=()):
     return f"{head}WITH {', '.join(items)} SKIP 0", types
 
 
+def mandatory_node_labels(part, name):
+    """Labels every row of QueryPart `part` gives node variable `name`: the
+    labels written on it in a node pattern of a mandatory MATCH of this part
+    (a filter on every row), provided the part ends by projecting `name`
+    unchanged and binds no other value under that name.  [] when unknown."""
+    from .syntax import split_top
+    tokenize, render = _tok()
+    tokens = tokenize(part)
+    rebinds = [k for k, t in enumerate(tokens)
+               if t.kind == 'ident' and t.upper == 'AS' and k + 1 < len(tokens) and tokens[k + 1].text == name]
+    clauses = _top_level(tokens)
+    if not clauses or clauses[-1][1] != 'WITH':
+        return []
+    pos = clauses[-1][0]
+    items = [render(item).strip() for item in split_top(tokens[pos + 1 + (tokens[pos + 1].upper == 'DISTINCT'):])]
+    if name not in items:
+        return []
+    labels = []
+    for k, (start, word) in enumerate(clauses):
+        if word != 'MATCH':
+            continue
+        end = clauses[k + 1][0] if k + 1 < len(clauses) else len(tokens)
+        depth = 0
+        for j in range(start + 1, end):
+            t = tokens[j]
+            if depth == 0 and t.kind == 'ident' and t.upper == 'WHERE':
+                break
+            if t.text == '(' and depth == 0 and j + 2 < end and tokens[j + 1].text == name \
+                    and tokens[j + 2].text == ':':
+                m = j + 2
+                while m + 1 < end and tokens[m].text == ':' and tokens[m + 1].kind in ('ident', 'quoted'):
+                    if all(r < j for r in rebinds):    # the value filtered is the one projected
+                        labels.append(tokens[m + 1].text.strip('`'))
+                    m += 2
+            depth += t.text in ('(', '[', '{')
+            depth -= t.text in (')', ']', '}')
+    return labels
+
+
+def _typing_only(tokens):
+    """Simplifications that keep every column type (used for type probes
+    only, never printed): drop the predicate of each top-level WHERE (a row
+    filter), and read a list slice `x[a..b]` as x (same list type).
+    Returns (tokens, changed)."""
+    out, depth, i, changed = [], 0, 0, False
+    stops = CLAUSE_STARTS | PROJECTION_TAIL - {'WHERE'}
+    while i < len(tokens):
+        t = tokens[i]
+        if depth == 0 and t.kind == 'ident' and t.upper == 'WHERE' and not (i and tokens[i - 1].text == '.'):
+            j, level = i + 1, 0
+            while j < len(tokens):
+                u = tokens[j]
+                level += u.text in ('(', '[', '{')
+                level -= u.text in (')', ']', '}')
+                if level == 0 and u.kind == 'ident' and u.upper in stops and tokens[j - 1].text != '.':
+                    break
+                j += 1
+            i, changed = j, True
+            continue
+        if t.text == '[' and out and (out[-1].text in (')', ']') or out[-1].kind in ('ident', 'quoted')) \
+                and out[-1].text not in ('-', '<-'):
+            j, level, slice_ = i, 0, False
+            while j < len(tokens):
+                level += tokens[j].text == '['
+                level -= tokens[j].text == ']'
+                if level == 1 and tokens[j].text == '..':
+                    slice_ = True
+                if level == 0:
+                    break
+                j += 1
+            if slice_ and j < len(tokens):
+                i, changed = j + 1, True
+                continue
+        depth += t.text in ('(', '[', '{')
+        depth -= t.text in (')', ']', '}')
+        out.append(t)
+        i += 1
+    return out, changed
+
+
 def type_probe_prefix(text, frontend, dialect, bind_columns):
     """Infer types across declared opaque procedures, never their row values.
 
@@ -227,6 +329,7 @@ def type_probe_prefix(text, frontend, dialect, bind_columns):
     tokenize, render = _tok()
     tokens = tokenize(text)
     changed, edits, i = False, [], 0
+    tokens, changed = _typing_only(tokens)
     # An identity list filter preserves element types, regardless of its
     # predicate's result. Keep the actual filter unchanged in the real query.
     while i + 3 < len(tokens):

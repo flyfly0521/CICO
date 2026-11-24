@@ -3409,12 +3409,47 @@ bool RewriterV4::validateRewriteCandidate(
     }
   }
   auto* projectionBody = queryPart.getProjectionBodyUnsafe();
+  // A scalar over this part's own aggregates (e.g. CASE WHEN sum(x) IS NOT
+  // NULL THEN sum(x) ELSE 0 END, the Neo4j frontend's sum): the aggregates
+  // are validated and registered one by one below, and the replacement
+  // rewrites them inside the scalar. Outside them, the scalar may only read
+  // what survives the rewrite, as for the post-aggregation predicate above.
+  std::unordered_set<std::string> partAggregates;
+  for (const auto& aggregate : projectionBody->getAggregateExpressions())
+    partAggregates.insert(aggregate->getUniqueName());
+  const auto scalarOverOwnAggregates = [&](const std::shared_ptr<Expression>& expression) {
+    if (!expression || expression->expressionType == ExpressionType::AGGREGATE_FUNCTION) return false;
+    bool sawAggregate = false;
+    expression_vector reads;
+    std::function<void(const std::shared_ptr<Expression>&)> collect =
+        [&](const std::shared_ptr<Expression>& e) {
+      if (!e) return;
+      if (partAggregates.contains(e->getUniqueName())) {
+        sawAggregate = true;
+        return;
+      }
+      if (e->expressionType == ExpressionType::AGGREGATE_FUNCTION ||
+          e->expressionType == ExpressionType::SUBQUERY ||
+          e->expressionType == ExpressionType::PROPERTY) {
+        reads.push_back(e);
+        return;
+      }
+      for (const auto& child : ExpressionChildrenCollector::collectChildren(*e)) collect(child);
+    };
+    collect(expression);
+    if (!sawAggregate) return false;
+    for (const auto& read : reads)
+      if (!validatePropertyCoverageForIndexRewrite(read, nodesIR, indexInfo, indexIR,
+              &retained.nodeUniqueNames, &retained.relUniqueNames)) return false;
+    return true;
+  };
   std::unordered_set<std::string> projectedAggregateNames;
   for (auto& expr : projectionBody->getProjectionExpressions()) {
     collectAggregateUniqueNames(expr, projectedAggregateNames);
     if (!validateProjectionExpressionForIndexRewrite(
             expr, matchClause, nodesIR, indexInfo, indexIR,
-            &retained.nodeUniqueNames, &retained.relUniqueNames)) {
+            &retained.nodeUniqueNames, &retained.relUniqueNames) &&
+        !scalarOverOwnAggregates(expr)) {
       return false;
     }
   }
@@ -3423,7 +3458,8 @@ bool RewriterV4::validateRewriteCandidate(
     for (const auto& expr : expressions) {
       if (!validateProjectionExpressionForIndexRewrite(
               expr, matchClause, nodesIR, indexInfo, indexIR,
-              &retained.nodeUniqueNames, &retained.relUniqueNames)) return false;
+              &retained.nodeUniqueNames, &retained.relUniqueNames) &&
+          !scalarOverOwnAggregates(expr)) return false;
     }
   }
   // An aggregate inside a registered finalizer target (a projected scalar

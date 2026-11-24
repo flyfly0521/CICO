@@ -294,11 +294,14 @@ class Printer:
                 src, dst = self._node(nodes[first]), self._node(nodes[second])
                 prefix = f'{self.dialect.ident(path[0])} = ' if path is not None else ''
                 if rel.get('direction') == 'SINGLE':
-                    segments.append((f'{prefix}{src}-{body}->{dst}', rel))
+                    text = f'{src}-{body}->{dst}'
                 elif rel.get('direction') == 'BOTH':
-                    segments.append((f'{prefix}{src}-{body}-{dst}', rel))
+                    text = f'{src}-{body}-{dst}'
                 else:
                     raise Unsupported('relationship direction')
+                wrapper = self.dialect.shortest_function(rel.get('rel_type') == ALL_SHORTEST) \
+                    if rel.get('recursive') is not None and rel.get('rel_type') in (SHORTEST, ALL_SHORTEST) else None
+                segments.append((f'{prefix}{wrapper}({text})' if wrapper else prefix + text, rel))
             for uid, node in nodes.items():
                 if uid not in touched:
                     segments.append((self._node(node), None))
@@ -415,6 +418,9 @@ class Printer:
                 raise Unsupported('anonymous variable')
             return self.dialect.ident(e['name'])
         if kind == 'CASE_ELSE':
+            special = self.dialect.special_expression(e, self)
+            if special is not None:
+                return special
             alternatives = e.get('alternatives') or []
             if not alternatives:
                 raise Unsupported('CASE without alternatives')

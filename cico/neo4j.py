@@ -132,6 +132,29 @@ def _ident(tok):
     return tok.text[1:-1].replace('``', '`') if tok.kind == 'quoted' else tok.text
 
 
+_ESCAPES = {'\\': '\\', "'": "'", '"': '"', 'n': '\n', 't': '\t', 'r': '\r', 'b': '\b', 'f': '\f'}
+
+
+def _unquote(literal):
+    """Value of a single-quoted Cypher string literal."""
+    body = literal[1:-1]
+    out, i = [], 0
+    while i < len(body):
+        c = body[i]
+        if c == '\\' and i + 1 < len(body) and body[i + 1] in _ESCAPES:
+            out.append(_ESCAPES[body[i + 1]])
+            i += 2
+            continue
+        out.append(c)
+        i += 1
+    return ''.join(out)
+
+
+def _quote(text):
+    """A single-quoted Cypher string literal with value `text`."""
+    return "'" + text.replace('\\', '\\\\').replace("'", "\\'") + "'"
+
+
 def _q(name):
     return name if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name) else '`' + name.replace('`', '``') + '`'
 
@@ -175,14 +198,103 @@ class Neo4jFrontend:
         tokens = self._count_relationships(tokens)
         tokens = self._drop_hints(tokens)
         tokens = self._shortest_paths(tokens)
+        tokens = self._walk_reachability(self._path_edge_predicates(tokens))
         if self.relax:
             tokens = self._implied_typed_labels(self._key_identities(tokens))
         self.var_tables = self._collect_var_tables(tokens)
         from .normalize import entity_id_comparisons, rewrite_coalesce, split_chained_comparisons
         tokens = split_chained_comparisons(rewrite_coalesce(tokens))
         tokens = self._with_uniqueness(tokens)
-        multi = {t for t, pairs in self.rel_pairs.items() if len(pairs) > 1}
-        return render(entity_id_comparisons(tokenize(render(self._translate(tokens))), multi))
+        if self.relax:
+            tokens = self._reanchor_root_paths(tokens)
+        multi ={t for t, pairs in self.rel_pairs.items() if len(pairs) > 1}
+        internal = render(entity_id_comparisons(tokenize(render(self._translate(tokens))), multi))
+        if self.relax:
+            internal = self._optional_carrier_edges(internal)
+        return internal
+
+    # ------------------------------------------- queries inside procedures
+    EMBEDDED = {('gds', 'graph', 'project', 'cypher'): (1, 2)}   # procedure -> query argument positions
+
+    def embedded_queries(self, cypher):
+        """Cypher queries passed as string literals to a procedure that runs
+        them (GDS Cypher projection: node and relationship query).  The
+        procedure's result depends on such a query only through its rows, so
+        a rewrite with the same rows (and columns) keeps the statement's
+        meaning.  -> (tokens, [(token index, query text, {inner: outer parameter})]),
+        or None.  Parameters reach the query through the config map entry
+        `parameters: {k: $k}`; a query naming any other parameter is skipped."""
+        from .normalize import call_args
+        tokens = tokenize(strip_comments(cypher).strip().rstrip(';'))
+        found = []
+        for i, t in enumerate(tokens):
+            for name, positions in self.EMBEDDED.items():
+                k = 2 * len(name) - 1
+                if not (i + k < len(tokens) and tokens[i + k].text == '('
+                        and all(tokens[i + 2 * m].kind == 'ident' and tokens[i + 2 * m].text.lower() == part
+                                and (m == 0 or tokens[i + 2 * m - 1].text == '.') for m, part in enumerate(name))):
+                    continue
+                if i and tokens[i - 1].text == '.':
+                    continue
+                _, args = call_args(tokens, i + k)
+                mapping = self._config_parameters(args[3]) if len(args) > 3 else {}
+                if mapping is None:
+                    continue
+                offset = i + k + 1
+                for n, arg in enumerate(args):
+                    if n in positions and len(arg) == 1 and arg[0].kind == 'string' and arg[0].text[0] == "'":
+                        text = _unquote(arg[0].text)
+                        names = set(re.findall(r'\$([A-Za-z_][A-Za-z0-9_]*)', strip_comments(text)))
+                        if names <= set(mapping):
+                            found.append((tokens.index(arg[0], offset), text, mapping))
+        return (tokens, found) if found else None
+
+    @staticmethod
+    def _config_parameters(arg):
+        """{inner: outer} from a config map literal's `parameters: {k: $v, ...}`
+        ({} without that entry; None when the map is not of that form)."""
+        if not arg or arg[0].text != '{' or arg[-1].text != '}':
+            return None
+        body = arg[1:-1]
+        for k, t in enumerate(body):
+            if t.kind == 'ident' and t.text == 'parameters' and k + 2 < len(body) and body[k + 1].text == ':' \
+                    and body[k + 2].text == '{' and (k == 0 or body[k - 1].text == ','):
+                close = closing_index(body, k + 2)
+                inner, out = body[k + 3:close], {}
+                for entry in [inner[m:m + 3] for m in range(0, len(inner), 4)]:
+                    if len(entry) != 3 or entry[0].kind != 'ident' or entry[1].text != ':' \
+                            or entry[2].kind != 'param':
+                        return None
+                    out[entry[0].text] = entry[2].text[1:]
+                if any(inner[m].text != ',' for m in range(3, len(inner), 4)):
+                    return None
+                return out
+        return {}
+
+    @staticmethod
+    def splice(tokens, replacements):
+        """Render tokens with string tokens replaced: {token index: query text}."""
+        out = []
+        for i, t in enumerate(tokens):
+            out.append(t.ws + (_quote(replacements[i]) if i in replacements else t.text))
+        return ''.join(out).strip()
+
+    def _optional_carrier_edges(self, internal):
+        """Relax stage: relax.py E1 on the translated internal text.  The
+        internal text has NeuG (homomorphism) semantics with Neo4j's
+        relationship uniqueness already explicit, so the E1 argument applies
+        unchanged; a unique_edge constraint on a Neo4j type holds for each of
+        its internal tables."""
+        import dataclasses
+        import types
+        from .relax import InternalRelax
+        items = [dataclasses.replace(c, rel=table) for c in self.constraints.items if c.kind == 'unique_edge'
+                 for table in self.rels.get(c.rel, [c.rel])]
+        if not items:
+            return internal
+        relax = InternalRelax.__new__(InternalRelax)
+        relax.c = types.SimpleNamespace(items=items)
+        return render(relax.optional_carrier_edges(tokenize(internal), self.premises))
 
     @staticmethod
     def _count_relationships(tokens):
@@ -306,6 +418,200 @@ class Neo4jFrontend:
                 raise Unsupported(f'WHERE on a {function}() path or relationship: Neo4j applies it during the search')
             i += 1
 
+    # ------------------------------------ variable-length path predicates
+    PREDICATE_WORDS = {'AND', 'OR', 'XOR', 'NOT', 'TRUE', 'FALSE', 'NULL', 'IS', 'IN', 'STARTS', 'ENDS',
+                       'CONTAINS', 'WITH', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'}
+    AGGREGATE_NAMES = {'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'COLLECT', 'STDEV', 'STDEVP',
+                       'PERCENTILECONT', 'PERCENTILEDISC'}
+
+    def _clause_bounds(self, tokens):
+        """[(position, clause word)] of the top-level clauses, then (n, 'END')."""
+        n, depth, bounds = len(tokens), 0, []
+        for i, t in enumerate(tokens):
+            if t.text in ('(', '[', '{'):
+                depth += 1
+            elif t.text in (')', ']', '}'):
+                depth -= 1
+            elif depth == 0 and t.kind == 'ident' and t.upper in self.CLAUSE_STARTS \
+                    and not (i and tokens[i - 1].text == '.'):
+                if t.upper == 'MATCH' and bounds and bounds[-1][1] == 'OPTIONAL' and bounds[-1][0] == i - 1:
+                    continue
+                bounds.append((i, t.upper))
+        bounds.append((n, 'END'))
+        return bounds
+
+    @staticmethod
+    def _depth0(tokens, start, end):
+        """Positions in [start, end) at bracket depth 0 relative to start."""
+        out, depth = [], 0
+        for i in range(start, end):
+            t = tokens[i]
+            if depth == 0:
+                out.append(i)
+            if t.text in ('(', '[', '{'):
+                depth += 1
+            elif t.text in (')', ']', '}'):
+                depth -= 1
+        return out
+
+    def _pattern_rels(self, tokens, start, end):
+        """Relationship brackets `-[ ... ]-` at depth 0 of a pattern span: [(open, close)]."""
+        return [(i, closing_index(tokens, i)) for i in self._depth0(tokens, start, end)
+                if tokens[i].text == '[' and i and tokens[i - 1].text in ('-', '<-')]
+
+    def _reads_only(self, body, name):
+        """Does the expression `body` read no variable but `name` (and
+        parameters, literals, property keys and function names)?  No list,
+        map or pattern syntax."""
+        for k, t in enumerate(body):
+            if t.text in ('[', '{', '|'):
+                return False
+            if t.kind not in ('ident', 'quoted'):
+                continue
+            if t.kind == 'ident' and t.upper in self.PREDICATE_WORDS:
+                continue
+            if k and body[k - 1].text in ('.', ':'):
+                continue                      # property key / label
+            if k + 1 < len(body) and body[k + 1].text == '(':
+                continue                      # function name
+            if _ident(t) != name:
+                return False
+        return True
+
+    def _path_edge_predicates(self, tokens):
+        """`MATCH p = (a)-[:T*l..u]->(b) WHERE all(x IN relationships(p) WHERE P)`
+        -> `MATCH (a)-[:T*l..u (x, n | WHERE P)]->(b)`: the internal recursive
+        relationship predicate holds on every relationship of the path, as
+        all() requires.  Only when p is that path's only use, the path has one
+        relationship pattern (variable-length), P reads x alone (with
+        parameters and literals), and the WHERE is a conjunction."""
+        while True:
+            edited = None
+            bounds = self._clause_bounds(tokens)
+            for k, (start, word) in enumerate(bounds[:-1]):
+                if word in ('MATCH', 'OPTIONAL') and bounds[k + 1][1] == 'WHERE':
+                    edited = self._path_edge_predicate(tokens, start + (2 if word == 'OPTIONAL' else 1),
+                                                       bounds[k + 1][0], bounds[k + 2][0])
+                    if edited is not None:
+                        break
+            if edited is None:
+                return tokens
+            tokens = edited
+
+    def _path_edge_predicate(self, tokens, ps, pe, we):
+        top = self._depth0(tokens, pe + 1, we)
+        if any(tokens[i].kind == 'ident' and tokens[i].upper in ('OR', 'XOR') for i in top):
+            return None
+        ands = [i for i in top if tokens[i].kind == 'ident' and tokens[i].upper == 'AND']
+        cuts = [pe] + ands + [we]
+        for c in range(len(cuts) - 1):
+            cs, ce = cuts[c] + 1, cuts[c + 1]
+            x = tokens[cs:ce]
+            if not (len(x) >= 11 and x[0].kind == 'ident' and x[0].upper == 'ALL' and x[1].text == '('
+                    and x[2].kind in ('ident', 'quoted') and x[3].kind == 'ident' and x[3].upper == 'IN'
+                    and x[4].kind == 'ident' and x[4].text.lower() == 'relationships' and x[5].text == '('
+                    and x[6].kind in ('ident', 'quoted') and x[7].text == ')'
+                    and x[8].kind == 'ident' and x[8].upper == 'WHERE'
+                    and closing_index(tokens, cs + 1) == ce - 1):
+                continue
+            var, path, body = _ident(x[2]), _ident(x[6]), x[9:-1]
+            if not body or not self._reads_only(body, var):
+                continue
+            assign = [i for i in self._depth0(tokens, ps, pe)
+                      if i + 2 < pe and tokens[i].kind in ('ident', 'quoted') and _ident(tokens[i]) == path
+                      and tokens[i + 1].text == '=' and tokens[i + 2].text == '(']
+            if len(assign) != 1:
+                continue
+            a = assign[0]
+            element_end = next((i for i in self._depth0(tokens, a, pe) if tokens[i].text == ','), pe)
+            rels = self._pattern_rels(tokens, a + 2, element_end)
+            if len(rels) != 1 or not any(t.text == '*' for t in tokens[rels[0][0]:rels[0][1]]):
+                continue
+            uses = [i for i, t in enumerate(tokens) if t.kind in ('ident', 'quoted')
+                    and not (i and tokens[i - 1].text == '.')]
+            if any(_ident(tokens[i]) == path for i in uses if i not in (a, cs + 6)):
+                continue
+            if any(_ident(tokens[i]) == var for i in uses if not cs <= i < ce):
+                continue
+            node = 'cico_hop_node'
+            while any(t.text == node for t in tokens):
+                node += '_'
+            inner = tokenize(f' ({_q(var)}, {node} | WHERE ') + [Tok(t.kind, t.text, t.ws) for t in body] \
+                + [Tok('punct', ')')]
+            close = rels[0][1]
+            # drop the conjunct (with one adjacent AND), or the whole WHERE
+            if len(cuts) == 2:
+                drop = range(pe, we)
+            elif c + 1 < len(cuts) - 1:
+                drop = range(cs, cuts[c + 1] + 1)
+            else:
+                drop = range(cuts[c], ce)
+            out = []
+            for i, t in enumerate(tokens):
+                if i in drop or i in (a, a + 1):
+                    continue
+                if i == a + 2:
+                    t.ws = tokens[a].ws
+                if i == close:
+                    out.extend(inner)
+                out.append(t)
+            return out
+        return None
+
+    def _walk_reachability(self, tokens):
+        """Mark `* WALK` a variable-length relationship whose Neo4j trails and
+        internal walks give the same rows: the only relationship pattern of
+        its MATCH clause, directed, lower bound 0 or 1, no path or relationship
+        variable used, and the clause followed (after an optional WHERE) by a
+        `WITH DISTINCT` without aggregates.  Every walk from a to b of length
+        k >= 1 contains a trail from a to b of length 1..k over a subset of its
+        edges (shortcut repeated nodes; a directed closed walk contains a
+        directed cycle through a), so the distinct bindings of the other
+        variables agree, with per-edge predicates and property maps as well."""
+        bounds = self._clause_bounds(tokens)
+        marks = []
+        for k, (start, word) in enumerate(bounds[:-1]):
+            if word not in ('MATCH', 'OPTIONAL'):
+                continue
+            ps, pe = start + (2 if word == 'OPTIONAL' else 1), bounds[k + 1][0]
+            rels = self._pattern_rels(tokens, ps, pe)
+            if len(rels) != 1:
+                continue
+            open_, close = rels[0]
+            inner = tokens[open_ + 1:close]
+            star = next((m for m, t in enumerate(inner) if t.text == '*'), None)
+            if star is None:
+                continue
+            left, right = tokens[open_ - 1].text, tokens[close + 1].text if close + 1 < len(tokens) else ''
+            if (left == '<-') == (right == '->'):
+                continue                      # undirected (or both arrows)
+            after = inner[star + 1:]
+            if after and after[0].kind == 'ident' and after[0].upper in ('SHORTEST', 'ALL', 'WALK'):
+                continue
+            lower = int(after[0].text) if after and after[0].kind == 'number' else 1
+            if lower > 1:
+                continue                      # *k.. / *k with k > 1
+            if any(t.text == '=' for t in (tokens[i] for i in self._depth0(tokens, ps, pe))):
+                continue                      # a path variable
+            var = _ident(inner[0]) if inner and inner[0].kind in ('ident', 'quoted') and star > 0 \
+                and (len(inner) > 1 and inner[1].text in (':', '*')) else None
+            if var is not None and any(t.kind in ('ident', 'quoted') and _ident(t) == var
+                                       for i, t in enumerate(tokens) if not open_ < i < close):
+                continue
+            nxt = k + 1
+            if bounds[nxt][1] == 'WHERE':
+                nxt += 1
+            w, end = bounds[nxt][0], bounds[nxt + 1][0] if nxt + 1 < len(bounds) else len(tokens)
+            if bounds[nxt][1] != 'WITH' or w + 1 >= len(tokens) or tokens[w + 1].upper != 'DISTINCT':
+                continue
+            if any(t.kind == 'ident' and t.upper in self.AGGREGATE_NAMES and m + 1 < end
+                   and tokens[m + 1].text == '(' for m, t in enumerate(tokens[w:end], w)):
+                continue
+            marks.append(open_ + 1 + star + 1)
+        for position in reversed(marks):
+            tokens.insert(position, Tok('ident', 'WALK', ' '))
+        return tokens
+
     # ---------------------------------------------- relationship uniqueness
     CLAUSE_STARTS = {'MATCH', 'OPTIONAL', 'WITH', 'RETURN', 'UNWIND', 'WHERE', 'ORDER', 'SKIP', 'LIMIT',
                      'CALL', 'UNION', 'CREATE', 'MERGE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'FOREACH'}
@@ -341,6 +647,12 @@ class Neo4jFrontend:
             where_end = bounds[k + 2][0] if where else None
             rels = self._clause_rels(tokens, start + (2 if word == 'OPTIONAL' else 1), pattern_end)
             unequal = self._where_unequal(tokens, pattern_end + 1, where_end) if where else set()
+            # The endpoints of a fixed-length relationship of an acyclic type
+            # (no self-loops, e.g. REPLY_OF) differ on every row of the clause.
+            for rel in rels:
+                if not rel['varlen'] and rel['types'] and rel['src'] and rel['dst'] \
+                        and all(t in self.acyclic for t in rel['types']):
+                    unequal.add(frozenset((rel['src'], rel['dst'])))
             clauses.append((start, word, pattern_end, where, where_end, rels, unequal, part))
         facts = self.part_facts(clauses)
         for start, word, pattern_end, where, where_end, rels, unequal, part in clauses:
@@ -355,6 +667,8 @@ class Neo4jFrontend:
                         # Unless the part's own filters already remove every
                         # row in which they could share an edge (root paths).
                         if word == 'MATCH' and self._uniqueness_implied(a, b, *facts.get(part, ([], set()))):
+                            continue
+                        if self._edge_into_path_start(a, b):
                             continue
                         raise Unsupported('relationship uniqueness involving a variable-length relationship')
                     if self._may_share(a, b, unequal):
@@ -484,6 +798,12 @@ class Neo4jFrontend:
             where_end = bounds[k + 2][0] if where else None
             rels = self._clause_rels(tokens, start + (2 if word == 'OPTIONAL' else 1), pattern_end)
             unequal = self._where_unequal(tokens, pattern_end + 1, where_end) if where else set()
+            # The endpoints of a fixed-length relationship of an acyclic type
+            # (no self-loops, e.g. REPLY_OF) differ on every row of the clause.
+            for rel in rels:
+                if not rel['varlen'] and rel['types'] and rel['src'] and rel['dst'] \
+                        and all(t in self.acyclic for t in rel['types']):
+                    unequal.add(frozenset((rel['src'], rel['dst'])))
             clauses.append((start, word, pattern_end, where, where_end, rels, unequal, part))
         return clauses
 
@@ -795,6 +1115,60 @@ class Neo4jFrontend:
             return None
         return functional
 
+    def _edge_into_path_start(self, a, b):
+        """A fixed x -[:T]-> s and a variable-length s -[:T*]-> ... of one
+        acyclic type T never share an edge, in any clause (OPTIONAL too): a
+        walk from s that used x -> s would return to s, a cycle."""
+        path, fixed = (a, b) if a['varlen'] else (b, a)
+        types = path.get('types') or []
+        return bool(path['varlen'] and not fixed['varlen'] and path['directed'] and fixed['directed']
+                    and len(types) == 1 and types[0] in self.acyclic and fixed.get('types') == types
+                    and path['src'] is not None and fixed['dst'] == path['src'])
+
+    def _reanchor_root_paths(self, tokens):
+        """Relax stage, after relationship uniqueness is explicit: in a clause
+        with c -[:T]-> t, an element `(t)-[:T*0..]->(e ...)` (acyclic T, no
+        upper bound) is read as `(c)-[:T*0..]->(e ...)` when c has at most one
+        outgoing T (declared at_most_one) and no table of c is one of e's
+        (so the path from c has length >= 1).  A walk from c of length k >= 1
+        is the edge c -> t followed by a walk from t of length k - 1, one to
+        one, so rows and multiplicities agree (internal homomorphism)."""
+        bounds = self._clause_bounds(tokens)
+        renames = {}
+        for k, (start, word) in enumerate(bounds[:-1]):
+            if word not in ('MATCH', 'OPTIONAL'):
+                continue
+            ps, pe = start + (2 if word == 'OPTIONAL' else 1), bounds[k + 1][0]
+            rels = self._clause_rels(tokens, ps, pe)
+            for path in rels:
+                types = path.get('types') or []
+                if not (path['varlen'] and path['directed'] and len(types) == 1 and types[0] in self.acyclic
+                        and path['var'] is None and path['src'] and path['dst_t']):
+                    continue
+                close = closing_index(tokens, path['open'])
+                inner = [t.text for t in tokens[path['open'] + 1:close]]
+                if inner[-3:] != ['*', '0', '..'] or tokens[path['open'] - 1].text != '-' \
+                        or tokens[close + 1].text != '->':
+                    continue
+                node_close = path['open'] - 2
+                node_open = node_close - 2
+                if not (node_open >= ps and tokens[node_open].text == '(' and tokens[node_close].text == ')'
+                        and _ident(tokens[node_open + 1]) == path['src']
+                        and (node_open == ps or tokens[node_open - 1].text == ',')):
+                    continue
+                fixed = next((r for r in rels if not r['varlen'] and r['directed'] and r.get('types') == types
+                              and r['dst'] == path['src'] and r['src'] and r['src_t']), None)
+                if fixed is None or {t.upper() for t in fixed['src_t']} & {t.upper() for t in path['dst_t']}:
+                    continue
+                premise = self.constraints.at_most_one_out(types[0], fixed['src_t'])
+                if premise is None:
+                    continue
+                renames[node_open + 1] = fixed['src']
+                self.premises.add(premise.describe())
+        for position, name in renames.items():
+            tokens[position] = Tok('ident', _q(name), tokens[position].ws)
+        return tokens
+
     def _uniqueness_implied(self, a, b, rels, unequal):
         """True when no row surviving the part's filters can bind relationships
         a and b (one variable-length) to a common edge, so Neo4j's uniqueness
@@ -881,7 +1255,8 @@ class Neo4jFrontend:
 
     @staticmethod
     def _where_unequal(tokens, start, end):
-        """Top-level `x <> y` / `NOT x = y` conjuncts between variables."""
+        """Top-level `x <> y` / `NOT x = y` / `x.p <> y.p` conjuncts: variable
+        pairs that differ on every row the WHERE keeps."""
         pairs, depth, part = set(), 0, []
         def flush(part):
             texts = [t.text for t in part]
@@ -890,6 +1265,11 @@ class Neo4jFrontend:
             if len(part) == 4 and part[0].upper == 'NOT' and part[1].kind == 'ident' and texts[2] == '=' \
                     and part[3].kind == 'ident':
                 pairs.add(frozenset((part[1].text, part[3].text)))
+            # x.p <> y.p: one entity has one value of p, so x and y differ.
+            if len(part) == 7 and texts[1] == texts[5] == '.' and texts[3] == '<>' \
+                    and part[0].kind == part[4].kind == 'ident' and texts[2] == texts[6] \
+                    and part[2].kind in ('ident', 'quoted'):
+                pairs.add(frozenset((part[0].text, part[4].text)))
         for t in tokens[start:end]:
             if t.text in ('(', '[', '{'):
                 depth += 1
@@ -990,6 +1370,34 @@ class Neo4jFrontend:
             if ok:
                 keep.append(table)
         return keep or tables
+
+    def _prune_varlen(self, tables, left_arrow, right_arrow, before, after):
+        """Tables a directed variable-length walk from its typed start node
+        can use: a hop leaves a node of the start tables or of the end tables
+        of an earlier usable hop (closure).  Other tables never occur in a
+        walk, so dropping them keeps the pattern's meaning."""
+        if not self.rel_pairs or (left_arrow == '<-') == (right_arrow == '->'):
+            return tables
+        start, forward = (before, True) if right_arrow == '->' else (after, False)
+        if start is None:
+            return tables
+        reach, keep, grown = set(start), set(), True
+        while grown:
+            grown = False
+            for table in tables:
+                pairs = self.rel_pairs.get(table.upper())
+                if pairs is None:
+                    return tables
+                for src, dst in pairs:
+                    a, b = (src, dst) if forward else (dst, src)
+                    if a in reach:
+                        if table not in keep:
+                            keep.add(table)
+                            grown = True
+                        if b not in reach:
+                            reach.add(b)
+                            grown = True
+        return [t for t in tables if t in keep] or tables
 
     def parameter_types(self, types):
         return {k: ('TIMESTAMP' if v in ('DATETIME', 'ZONED DATETIME', 'LOCAL DATETIME') else v)
@@ -1098,12 +1506,43 @@ class Neo4jFrontend:
                     and not (out and out[-1].text in ('.', '{', ',')):
                 # label predicate x:Label (outside patterns and maps)
                 text = self._label_predicate(_ident(t), _ident(tokens[i + 2]))
+                # Its parentheses only matter next to an operator binding at
+                # least as tightly as `=`/IN. Between boolean connectives they
+                # are dropped, so the internal text spells e.g.
+                # `(label(m) = 'POST' OR label(n) = 'POST')` as a FILL template.
+                before = out[-1].upper if out and out[-1].kind == 'ident' else (out[-1].text if out else '(')
+                after = (tokens[i + 3].upper if tokens[i + 3].kind == 'ident' else tokens[i + 3].text) \
+                    if i + 3 < n else ')'
+                if before in ('(', ',', 'AND', 'OR', 'XOR', 'WHEN', 'THEN', 'ELSE', 'CASE', 'WHERE') \
+                        and after in (')', ',', 'AND', 'OR', 'XOR', 'WHEN', 'THEN', 'ELSE', 'END', 'AS') \
+                        and text.startswith('(') and text.endswith(')'):
+                    text = text[1:-1]
                 out.extend(tokenize(text))
                 out[-len(tokenize(text))].ws = t.ws
                 i += 3
                 continue
+            if t.kind == 'ident' and t.upper == 'CASE' and not (out and out[-1].text == '.'):
+                found = self._nullable_sum(tokens, i)
+                if found is not None:
+                    end, inner = found
+                    text = f'sum({render(self._translate(inner))})'
+                    new = tokenize(text)
+                    new[0].ws = t.ws
+                    out.extend(new)
+                    i = end
+                    continue
             if t.kind == 'ident' and i + 1 < n and tokens[i + 1].text == '(':
                 func = t.text.lower()
+                if func == 'sum' and not (out and out[-1].text == '.'):
+                    # Neo4j's sum() of no (non-null) values is 0, NeuG's NULL.
+                    end, inner = self._call_args(tokens, i + 1)
+                    body = f'sum({render(self._translate(inner))})'
+                    text = f'(CASE WHEN ({body}) IS NOT NULL THEN ({body}) ELSE (0) END)'
+                    new = tokenize(text)
+                    new[0].ws = t.ws
+                    out.extend(new)
+                    i = end
+                    continue
                 if func in ('tofloat', 'tointeger', 'tostring'):
                     end, inner = self._call_args(tokens, i + 1)
                     target = {'tofloat': 'DOUBLE', 'tointeger': 'INT64', 'tostring': 'STRING'}[func]
@@ -1147,6 +1586,22 @@ class Neo4jFrontend:
                     out[-len(tokenize(text))].ws = t.ws
                     i = end
                     continue
+            if t.kind == 'ident' and t.text.lower() in ('datetime', 'localdatetime') and i + 3 < n \
+                    and tokens[i + 1].text == '.' and tokens[i + 2].text.lower() == 'truncate' \
+                    and tokens[i + 3].text == '(' and not (out and out[-1].text == '.'):
+                # datetime.truncate('day', x): midnight of x's day (in x's
+                # zone; datetimes are read as UTC TIMESTAMPs, as everywhere
+                # in this frontend) == internal date_trunc('day', x).
+                from .normalize import call_args
+                end, args = call_args(tokens, i + 3)
+                if not (len(args) == 2 and len(args[0]) == 1 and args[0][0].kind == 'string'
+                        and args[0][0].text[1:-1].lower() == 'day'):
+                    raise Unsupported(f'{t.text}.truncate() other than by day')
+                text = f"date_trunc('day', {render(self._translate(args[1]))})"
+                out.extend(tokenize(text))
+                out[-len(tokenize(text))].ws = t.ws
+                i = end
+                continue
             if t.kind in ('ident', 'quoted') and i + 2 < n and tokens[i + 1].text == '.' \
                     and tokens[i + 2].kind in ('ident', 'quoted') and not (out and out[-1].text == '.') \
                     and not self._temporal(tokens, i):
@@ -1202,6 +1657,25 @@ class Neo4jFrontend:
                 and tokens[j + 1].text.lower() in TEMPORAL_FIELDS and (len(base) == 3 or tokens[i].kind == 'param'):
             return j + 2, f"date_part('{tokens[j + 1].text.lower()}', {''.join(b.text for b in base)})"
         return None
+
+    def _nullable_sum(self, tokens, i):
+        """`CASE WHEN count([DISTINCT] a) = 0 THEN null ELSE sum([DISTINCT] a) END`
+        at tokens[i]: a sum that is NULL on no values, i.e. NeuG's sum(a).
+        Returns (end, tokens of `[DISTINCT] a`) or None."""
+        n = len(tokens)
+        def word(k, w):
+            return k < n and tokens[k].kind == 'ident' and tokens[k].upper == w
+        if not (word(i + 1, 'WHEN') and word(i + 2, 'COUNT') and i + 3 < n and tokens[i + 3].text == '('):
+            return None
+        k, counted = self._call_args(tokens, i + 3)
+        if not (k + 5 < n and tokens[k].text == '=' and tokens[k + 1].text == '0' and word(k + 2, 'THEN')
+                and word(k + 3, 'NULL') and word(k + 4, 'ELSE') and word(k + 5, 'SUM')
+                and k + 6 < n and tokens[k + 6].text == '('):
+            return None
+        k, summed = self._call_args(tokens, k + 6)
+        if not word(k, 'END') or render(counted).split() != render(summed).split():
+            return None
+        return k + 1, summed
 
     @staticmethod
     def _call_args(tokens, open_index):
@@ -1359,6 +1833,8 @@ class Neo4jFrontend:
             if j < n and tokens[j].kind == 'ident' and tokens[j].upper in ('SHORTEST', 'ALL'):
                 mode = 'ALL SHORTEST' if tokens[j].upper == 'ALL' else 'SHORTEST'
                 j += 2 if mode == 'ALL SHORTEST' else 1
+            elif j < n and tokens[j].kind == 'ident' and tokens[j].upper == 'WALK':
+                j += 1                        # _walk_reachability: trails == walks here
             elif not types or any(name not in self.acyclic for name in types):
                 # Neo4j variable-length relationships are trails (no edge
                 # repeated); internally they are walks.  The two agree only on
@@ -1386,11 +1862,19 @@ class Neo4jFrontend:
             end, inner = self._call_args(tokens, j)
             out += ' {' + render(self._translate(inner, map_body=True)) + '}'
             j = end
+        if j < n and tokens[j].text == '(' and tokens[star].text == '*':
+            # (x, n | WHERE P) from _path_edge_predicates
+            close = closing_index(tokens, j)
+            inner = tokens[j + 1:close]
+            bar = next(k for k, t in enumerate(inner) if t.text == '|')
+            out += ' (' + render(inner[:bar]) + ' | WHERE ' + render(self._translate(inner[bar + 2:])) + ')'
+            j = close + 1
         if j >= n or tokens[j].text != ']':
             raise Unsupported('relationship pattern')
         both = tokens[i - 1].text == '<-' and j + 1 < n and tokens[j + 1].text == '->'
-        if mapped and tokens[star].text != '*':
-            # fixed-length only: intermediate hops of a path may use any table
+        if mapped:
+            # fixed-length: prune by both endpoints; variable-length: by the
+            # tables a walk from the start node can reach (_prune_varlen)
             before = None
             if i >= 2 and tokens[i - 2].text == ')':
                 depth, k = 0, i - 2
@@ -1403,7 +1887,10 @@ class Neo4jFrontend:
                 before = self._endpoint_tables(tokens, k)
             right = tokens[j + 1].text if j + 1 < n else ''
             after = self._endpoint_tables(tokens, j + 2)
-            mapped = self._prune(mapped, tokens[i - 1].text, right, before, after)
+            if tokens[star].text != '*':
+                mapped = self._prune(mapped, tokens[i - 1].text, right, before, after)
+            else:
+                mapped = self._prune_varlen(mapped, tokens[i - 1].text, right, before, after)
         if mapped:
             out = out[:head] + ':' + '|'.join(_q(t) for t in mapped) + out[head:]
         return j + 1, tokenize(out + ']'), both
@@ -1567,22 +2054,30 @@ def _ref(e):
 
 
 def _unequal(predicate):
+    """Entity pairs that differ on every row the predicate keeps: `a <> b`,
+    and `a.p <> b.p` (one entity has one value of p)."""
     pairs = set()
     for c in _conjuncts(predicate):
         if c.get('function') == 'NOT_EQUALS' and len(c.get('children') or []) == 2:
             a, b = (_ref(x) for x in c['children'])
             if a and b:
                 pairs.add(frozenset((a, b)))
+                continue
+            x, y = c['children']
+            if x.get('k') == y.get('k') == 'PROPERTY' and x.get('property') == y.get('property') \
+                    and x.get('owner') and y.get('owner'):
+                pairs.add(frozenset((x['owner'], y['owner'])))
     return pairs
 
 
-def may_share_edge(a, b, predicate, entity_tables, rel_group):
-    """Could relationships a and b (IR) bind the same edge?"""
+def may_share_edge(a, b, predicate, entity_tables, rel_group, distinct_nodes=frozenset()):
+    """Could relationships a and b (IR) bind the same edge?  distinct_nodes:
+    node pairs known to differ on every row of the clause."""
     def tables(rel):
         return {rel_group.get(t, t).upper() for t in rel.get('tables') or []}
     if not tables(a) & tables(b):
         return False
-    unequal = _unequal(predicate)
+    unequal = _unequal(predicate) | set(distinct_nodes)
     if frozenset((a['uid'], b['uid'])) in unequal:
         return False
     if a.get('recursive') is None and b.get('recursive') is None:
@@ -1698,8 +2193,15 @@ class Neo4jDialect(Dialect):
         return self.property(owner, '_LENGTH', uid)   # unchanged spelling; the guard rejects it
 
     def shortest_length(self, all_paths, lower, upper):
-        # Neo4j's shortestPath() is a path function, not a relationship form.
-        raise Unsupported('non-walk recursive relationship')
+        # The relationship of `shortestPath((a)-[r:T*l..u]-(b))`;
+        # shortest_function() supplies the wrapper.  Neo4j accepts only the
+        # lower bounds 0 and 1 there.
+        if lower not in (0, 1):
+            raise Unsupported(f'shortest path with lower bound {lower}')
+        return self.var_length(lower, upper)
+
+    def shortest_function(self, all_paths):
+        return 'allShortestPaths' if all_paths else 'shortestPath'
 
     def label_of(self, arg):
         raise Unsupported('label() has no exact Neo4j equivalent')
@@ -1716,14 +2218,45 @@ class Neo4jDialect(Dialect):
             return super().match_text(keyword, parts, predicate)
         if keyword == 'MATCH':
             return 'MATCH ' + ' MATCH '.join(text for text, _ in parts)
+        # The endpoints of a fixed-length relationship of an acyclic type
+        # (no self-loops, e.g. REPLY_OF) differ on every row.
+        acyclic = {t.upper() for name in self.m.get('acyclic_rel_types') or []
+                   for t in self.m['rel_types'].get(name, [])}
+        distinct = {frozenset((r['src'], r['dst'])) for r in rels
+                    if r.get('recursive') is None and r.get('tables')
+                    and all(t.upper() in acyclic or self.rel_group.get(t, t).upper() in acyclic for t in r['tables'])}
+        def into_path_start(a, b):
+            # fixed x -[:T]-> s and a walk s -[:T*]-> ... of an acyclic T never
+            # share an edge (Neo4jFrontend._edge_into_path_start)
+            path, fixed = (a, b) if a.get('recursive') is not None else (b, a)
+            return (path.get('recursive') is not None and fixed.get('recursive') is None
+                    and path.get('direction') == fixed.get('direction') == 'SINGLE'
+                    and path.get('tables') and fixed.get('tables')
+                    and all(t.upper() in acyclic or self.rel_group.get(t, t).upper() in acyclic
+                            for t in list(path['tables']) + list(fixed['tables']))
+                    and fixed.get('dst') == path.get('src'))
         for i, a in enumerate(rels):
             for b in rels[i + 1:]:
-                if may_share_edge(a, b, predicate, self.entity_tables, self.rel_group):
+                if into_path_start(a, b):
+                    continue
+                if may_share_edge(a, b, predicate, self.entity_tables, self.rel_group, distinct):
                     raise Unsupported('OPTIONAL MATCH whose relationships Neo4j would force distinct')
         return super().match_text(keyword, parts, predicate)
 
     def special_expression(self, e, printer):
-        """label(x) = 'TABLE'  ->  (x:Label)   (Neo4j label predicate)."""
+        """label(x) = 'TABLE'  ->  (x:Label)   (Neo4j label predicate).
+        Sums: Neo4j's sum() of no (non-null) values is 0, NeuG's NULL (the
+        frontend reads Neo4j `sum(a)` as `CASE WHEN sum(a) IS NOT NULL THEN
+        sum(a) ELSE 0 END`), so a NeuG sum that is 0 when NULL prints as
+        `sum(a)` and a bare NeuG sum as
+        `CASE WHEN count(a) = 0 THEN null ELSE sum(a) END`."""
+        from .canonical import sum_or_zero
+        total = sum_or_zero(e)
+        if total is not None:
+            return self._sum(total, printer)
+        if e.get('k') == 'AGGREGATE_FUNCTION' and e.get('function') == 'SUM':
+            text = self._sum(e, printer)
+            return f"CASE WHEN count{text[3:]} = 0 THEN null ELSE {text} END"
         if e.get('function') != 'EQUALS' or len(e.get('children') or []) != 2:
             return None
         for label, literal in (e['children'], e['children'][::-1]):
@@ -1740,6 +2273,10 @@ class Neo4jDialect(Dialect):
                 return f'({self.ident(printer.entity_name(arg["owner"]))}:{self.ident(name)})'
         return None
 
+    def _sum(self, e, printer):
+        return Dialect.aggregate(self, 'SUM', [printer.expr(c) for c in e.get('children') or []],
+                                 e.get('distinct', False))
+
     def temporal_literal(self, type_name, text):
         if type_name == 'DATE':
             return f'date({self.string(text)})'
@@ -1749,7 +2286,12 @@ class Neo4jDialect(Dialect):
 
     def literal(self, v):
         if v.get('null') and v.get('type') not in ('ANY', 'NULL', ''):
-            raise Unsupported('typed NULL for Neo4j')
+            # The frontend reads toFloat(null) as CAST(NULL AS DOUBLE), etc.
+            function = {'DOUBLE': 'toFloat', 'FLOAT': 'toFloat', 'INT64': 'toInteger',
+                        'STRING': 'toString'}.get(v.get('type'))
+            if function is None:
+                raise Unsupported('typed NULL for Neo4j')
+            return f'{function}(null)'
         return super().literal(v)
 
     def cast(self, arg, type_name):
@@ -1760,7 +2302,8 @@ class Neo4jDialect(Dialect):
         return f'{function}({arg})'
 
     SPELLING = {'TIMESTAMP': 'datetime', 'DATE': 'date', 'LOWER': 'toLower', 'UPPER': 'toUpper',
-                'TO_INTERVAL': None, 'INTERVAL': None, 'LABEL': None, 'LABELS': None}
+                'TO_INTERVAL': None, 'INTERVAL': None, 'LABEL': None, 'LABELS': None,
+                'RELS': 'relationships'}
 
     INTERVAL_UNITS = {'year': ('Y', False), 'month': ('M', False), 'week': ('W', False), 'day': ('D', False),
                       'hour': ('H', True), 'minute': ('M', True), 'second': ('S', True)}
@@ -1805,6 +2348,12 @@ class Neo4jDialect(Dialect):
             label = self._typed_label(e)
             if label:
                 return label
+        if name == 'STRUCT_EXTRACT' and e is not None:
+            # `x._ID` of a node/relationship value (e.g. an UNWIND variable
+            # over relationships(path)): Neo4j's id(x).
+            child = (e.get('children') or [None, None])[1] or {}
+            if child.get('k') == 'LITERAL' and str((child.get('value') or {}).get('text')).upper() == '_ID':
+                return f'id({args[0]})'
         return super().function(name, args, e)
 
     def _typed_label_of(self, e):

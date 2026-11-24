@@ -28,6 +28,72 @@ def _is_entity(e):
     return e is not None and 'entity' in e
 
 
+NUMERIC = {'INT8', 'INT16', 'INT32', 'INT64', 'UINT8', 'UINT16', 'UINT32', 'UINT64', 'FLOAT', 'DOUBLE'}
+
+
+def _literal_value(e):
+    """A numeric literal, or a CAST of one to a numeric type, as a
+    comparable value (its spelling, e.g. 0 / 0.000000, does not matter)."""
+    if not e or e.get('type') not in NUMERIC:
+        return None
+    if e.get('function') == 'CAST' and e.get('children'):
+        inner = e['children'][0]
+        if inner.get('k') != 'LITERAL':
+            return None
+        e = dict(inner, type=e.get('type'))
+    elif e.get('k') != 'LITERAL':
+        return None
+    v = e.get('value') or {}
+    if v.get('null'):
+        return dict(null=True, type=e.get('type'))
+    try:
+        return dict(num=float(v.get('text')), type=e.get('type'))
+    except (TypeError, ValueError):
+        return None
+
+
+def _zero(e):
+    if not e:
+        return False
+    if e.get('k') == 'LITERAL':
+        v = e.get('value') or {}
+        try:
+            return not v.get('null') and float(v.get('text')) == 0
+        except (TypeError, ValueError):
+            return False
+    return e.get('function') == 'CAST' and bool(e.get('children')) and _zero(e['children'][0])
+
+
+def _same(a, b):
+    return a is not None and b is not None and _key(_strip(a)) == _key(_strip(b))
+
+
+def _strip(e):
+    if isinstance(e, dict):
+        return {k: _strip(v) for k, v in e.items() if k not in ('uid', 'alias', 'owner_raw')}
+    if isinstance(e, list):
+        return [_strip(v) for v in e]
+    return e
+
+
+def sum_or_zero(e):
+    """The SUM s of an expression `CASE WHEN s IS NULL THEN 0 ELSE s END` or
+    `CASE WHEN s IS NOT NULL THEN s ELSE 0 END` whose type is s's, else None."""
+    if not e or e.get('k') != 'CASE_ELSE' or len(e.get('alternatives') or []) != 1:
+        return None
+    alt = e['alternatives'][0]
+    when, then, other = alt.get('when') or {}, alt.get('then'), e.get('else')
+    test = (when.get('children') or [None])[0]
+    if not test or test.get('k') != 'AGGREGATE_FUNCTION' or test.get('function') != 'SUM' \
+            or test.get('type') != e.get('type'):
+        return None
+    if when.get('function') == 'IS_NULL' and _zero(then) and _same(other, test):
+        return test
+    if when.get('function') == 'IS_NOT_NULL' and _same(then, test) and _zero(other):
+        return test
+    return None
+
+
 class Canonicalizer:
     def __init__(self, names, rel_pairs=None):
         self.names = names
@@ -95,6 +161,16 @@ class Canonicalizer:
             return None
         if e.get('uid') in self.scope and not _is_entity(e):
             return dict(ref=self.scope[e['uid']], type=e.get('type'))
+        folded = _literal_value(e)
+        if folded is not None:
+            # CAST(<literal> AS T) re-binds as a literal of type T.
+            return dict(k='LITERAL', type=e.get('type'), value=folded)
+        total = sum_or_zero(e)
+        if total is not None:
+            # `CASE WHEN s IS NULL THEN 0 ELSE s END` and
+            # `CASE WHEN s IS NOT NULL THEN s ELSE 0 END` (s a SUM of the
+            # CASE's own type): the same value, spelled either way.
+            return dict(k='SUM_OR_ZERO', type=e.get('type'), sum=self.expr(total))
         if e.get('k') == 'PROPERTY' and e.get('property') == '_ID' and 'owner' in e:
             return dict(idof=self.name(e['owner']))
         out = dict(k=e.get('k'), type=e.get('type'))

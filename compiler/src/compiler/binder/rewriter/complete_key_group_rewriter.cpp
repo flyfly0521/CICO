@@ -379,6 +379,11 @@ bool completeKeyGroupInputsAreClosed(
                             info.getPredicateTemplates().end(), *key) !=
                       info.getPredicateTemplates().end();
   };
+  std::unordered_set<std::string> coveredAggregateNames;
+  if (coveredExpressions != nullptr)
+    for (const auto* covered : *coveredExpressions)
+      if (covered != nullptr && covered->expressionType == ExpressionType::AGGREGATE_FUNCTION)
+        coveredAggregateNames.insert(covered->getUniqueName());
   std::function<bool(const std::shared_ptr<Expression>&, bool)> independent =
       [&](const auto& expression, bool currentMatchPredicate) {
     if (!expression) return true;
@@ -387,6 +392,13 @@ bool completeKeyGroupInputsAreClosed(
     // can hide a removed input. The per-pair aggregate callers independently
     // prove their whole aggregate templates and use the default mode below.
     if (coveredExpressions != nullptr && coveredExpressions->contains(expression.get()))
+      return true;
+    // A projection may hold its own copy of a covered aggregate (e.g. the SUM
+    // inside CASE WHEN sum(x) IS NOT NULL THEN sum(x) ELSE 0 END); the binder
+    // gives both the same unique name, and the replacement rewrites both.
+    if (coveredExpressions != nullptr &&
+        expression->expressionType == ExpressionType::AGGREGATE_FUNCTION &&
+        coveredAggregateNames.contains(expression->getUniqueName()))
       return true;
     switch (expression->expressionType) {
     case ExpressionType::AGGREGATE_FUNCTION:
@@ -424,7 +436,7 @@ bool completeKeyGroupInputsAreClosed(
       static const std::set<std::string> deterministic = {
           "+", "-", "*", "/", "%", "LABEL", "STRUCT_EXTRACT", "TIMESTAMP",
           "CAST_TO_INT64", "CAST_TO_DOUBLE", "CAST_TO_STRING", "CAST_TO_DATE",
-          "CAST_TO_TIMESTAMP", "CAST_TO_FLOAT", "ROUND", "ABS", "FLOOR", "CEIL",
+          "CAST_TO_TIMESTAMP", "CAST_TO_FLOAT", "CAST", "ROUND", "ABS", "FLOOR", "CEIL",
           "CEILING", "SIGN",
           // Pure list/path functions (e.g. UNWIND rels(path) AS rel, IC14):
           // their value depends only on their arguments, checked below.
