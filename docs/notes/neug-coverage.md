@@ -37,7 +37,7 @@ BI 改写成功的：bi2、bi3、bi4（只读 ROOT_POST）、bi5、bi8、bi9、b
   CICO 的编译器副本没有登记 WSHORTEST（执行体是桩），Kuzu/Neo4j 上的 bi-15/19/20 主查询也一样。NeuG 的权重在 baseline
   setup 里本来就由 baseline 自有的 FILL 物化（bi15_base_*、bi20_base_*），这些 FILL 经 CICO 注册成功。
 - **有索引但形状不匹配（11 条）**：bi14a（REL 列无法作为下一 QueryPart 的输入桩）、bi6、ic14、q2、q6、q7、tcr-9、tcr-10、
-  tcr-11、tsr-2、tsr-3。Kuzu 上与它们对应的 baseline 也都需要 input 版本（见 kuzu-input-rewrites.md）；NeuG 还没有 input 目录。
+  tcr-11、tsr-2、tsr-3。Kuzu 上与它们对应的 baseline 也都需要 input 版本（见 kuzu-input-rewrites.md）；NeuG 的对应写法在 `NeuG/queries/optimized`，见下节。
   bi4 只读到了 ROOT_POST，没读到 BI4_MESSAGE_COUNT。
 
 没读到的 37 个索引对应上面几类：bi14 系列（含 bi15/bi19a 的一级方向计数）×8、bi15u/bi15/bi15w 的权重与窗口计数 ×5、
