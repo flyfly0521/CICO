@@ -20,6 +20,12 @@ For each workload, one middleware session on the NeuG database schema
    through the middleware first, then the query is rewritten.
 
   python3 tests/neug_coverage.py --output cov.json [--workloads ldbc-bi ...]
+      [--query-set baseline|optimization]
+
+--query-set optimization checks NeuG/queries/optimized: the NeuG rewrite
+inputs (queries kept in their graph-pattern form for the rewriter, see
+NeuG/queries/optimized/README.md), the role of Kuzu/Neo4j queries/input.
+Dialect neug is NeuG itself: the queries reach the compiler unchanged.
 """
 import argparse
 import collections
@@ -139,11 +145,11 @@ def run_statements(mw, text, params):
     return out
 
 
-def run(workload):
+def run(workload, query_set='baseline'):
     R = neug_runner()
-    wl = R.workload_for_query_set(R.WORKLOADS[RUNNER_NAMES[workload]], 'baseline')
+    wl = R.workload_for_query_set(R.WORKLOADS[RUNNER_NAMES[workload]], query_set)
     K.SYSTEM = 'kuzu'      # index parameter derivation as in the Kuzu/Neo4j runs
-    out = dict(workload=workload, indexes=[], queries=[])
+    out = dict(workload=workload, query_set=query_set, indexes=[], queries=[])
     with IndexMiddleware(neug_schema(workload), dialect='neug', constraints=K.constraints_for(workload)) as mw:
         out['indexes'] = K.register_indexes(mw, workload)
         for path in R.queries_for(wl, include_setup=False):
@@ -220,9 +226,10 @@ def summarize(report):
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--workloads', nargs='*', default=list(W.WORKLOADS))
+    parser.add_argument('--query-set', default='baseline', choices=['baseline', 'optimization'])
     parser.add_argument('--output', required=True)
     args = parser.parse_args(argv)
-    report = [run(w) for w in args.workloads]
+    report = [run(w, args.query_set) for w in args.workloads]
     json.dump(report, open(args.output, 'w'), indent=1, ensure_ascii=False, default=str)
     print(summarize(report))
 

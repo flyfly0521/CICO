@@ -53,3 +53,31 @@ PERSON(likeCount)；ic14_weight_v2；q2 ×2、q6、q7 ×4；tcr9 ×3、tcr10 ×2
 - 编译器同步到 IncGQ `c988ea9d`（`tools/sync_compiler.py --clean`）：唯一的上游变化是 RewriterV4 中跨 QueryPart 引用替换时
   聚合名的匹配从子串改为相等；补丁全部照常应用，Kuzu/Neo4j 覆盖率不变（84/85、82/85，各 63/106）。
 - `tests/workloads.py`：`parameters(..., text=None)` 返回整组参数。
+
+## NeuG input（`NeuG/queries/optimized`）
+
+NeuG 的 optimized 查询是 NeuG 改写器的输入：多数保留原图查询形态，由 FILL 元数据触发改写（见其 README），作用与
+Kuzu/Neo4j 的 `queries/input` 相同。CICO 的 `neug` 方言就是 NeuG 本身（`IdentityFrontend`），查询原样进入编译器，不做方言转换。
+`tests/neug_coverage.py --query-set optimization`（结果 `cico_work/cov_neug_opt_a.*`）：
+
+| workload | 只读查询改写 | 读到的已注册索引 |
+| --- | --- | --- |
+| hetionet | 24/26 | 22/23 |
+| ldbc-bi | 7/13 | 7/31 |
+| ldbc-ic | 2/5（ic5、ic14） | 2/2 |
+| lsqb | 6/9（q1、q4–q8） | 11/13 |
+| finbench | 10/11（除 tcr-10） | 12/16 |
+| 合计 | **49/64** | **54/85** |
+
+与 baseline 合起来，85 个已注册索引中 60 个至少被一组查询读到。
+
+input 中没有改写的 15 条：
+
+- 已经手写为读物化属性，不需要改写：hetionet 3-07、3-12，bi11。
+- bi4 读 `forum.bi4MaxCountryMemberCount`，`NeuG/queries/index` 中没有任何脚本建这一列（文档自身不一致）。
+- WSHORTEST：bi15a、bi19a、bi20。
+- 没有索引：ic1、ic3、ic12、q3、q9。
+- 有索引但没有匹配上：bi14a、q2、tcr-10。
+
+两组都没读到的 25 个索引：bi14 系列 ×8、bi15/bi15u/bi15w ×5、bi19 ×2、bi20 ×2、BI4_MESSAGE_COUNT、PERSON(likeCount)；
+q2 ×2；tcr9TransferIn（与 tcr6TransferIn 定义相同，tcr-9 读的是后者）、tsr2TransferIn（tsr-2 只读到了出边那一组）、tcr10 ×2。
