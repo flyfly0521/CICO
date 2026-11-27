@@ -26,9 +26,13 @@ For each workload, one middleware session on the NeuG database schema
 inputs (queries kept in their graph-pattern form for the rewriter, see
 NeuG/queries/optimized/README.md), the role of Kuzu/Neo4j queries/input.
 Dialect neug is NeuG itself: the queries reach the compiler unchanged.
---query-set rewrite checks NeuG/queries/rewrite: the optimized queries that
-are the baseline text or another graph-pattern form reading no materialized
-name (NeuG/queries/rewrite/README.md).
+--query-set rewrite checks NeuG/queries/rewrite: every baseline query that an
+index applies to, verbatim or in a semantically equivalent form the rewriter
+matches; none reads a materialized name (NeuG/queries/rewrite/README.md).
+
+Every rewritten statement is compiled again with the NeuG compiler against
+the indexed catalog (compile_error): rules outside the compiler print text
+the compiler never saw, e.g. a function NeuG does not have.
 """
 import argparse
 import collections
@@ -41,6 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from cico import IndexMiddleware  # noqa: E402
+from cico.middleware import _used, infer_parameter_types  # noqa: E402
 from cico.statements import classify, split_script  # noqa: E402
 import kuzu_optimized_coverage as K  # noqa: E402
 import workloads as W  # noqa: E402
@@ -138,6 +143,19 @@ def index_dirs_of(workload, case):
                   and (p.name == key or K.owner_key(workload, p.name) == base))
 
 
+def compile_error(mw, cypher, params):
+    """Bind a rewritten statement with the NeuG compiler against the indexed
+    catalog (parser, binder, function catalog; nothing runs): None when it
+    compiles, else the error.  The rewrite rules outside the compiler print
+    text that the compiler itself never saw."""
+    types = mw.frontend.parameter_types(infer_parameter_types(params or {}))
+    try:
+        mw.engine.bind(cypher, _used(types, cypher), catalog='indexed')
+    except Exception as error:                      # noqa: BLE001
+        return str(error)[:400]
+    return None
+
+
 def run_statements(mw, text, params):
     out = []
     for statement in split_script(text):
@@ -150,7 +168,7 @@ def run_statements(mw, text, params):
 
 def run(workload, query_set='baseline'):
     R = neug_runner()
-    if query_set == 'rewrite':        # NeuG/queries/rewrite: optimized queries left to the rewriter
+    if query_set == 'rewrite':        # NeuG/queries/rewrite: the baseline queries left to the rewriter
         import dataclasses
         base = R.workload_for_query_set(R.WORKLOADS[RUNNER_NAMES[workload]], 'baseline')
         wl = dataclasses.replace(base, query_dir=W.DOCS / 'NeuG/queries/rewrite' / R.dataset_dir_for(base.name))
@@ -188,11 +206,18 @@ def run(workload, query_set='baseline'):
                 out['queries'].append(dict(row, reason='template', rewritten=False, detail=str(error)[:300]))
                 continue
             statements = [s for s in split_script(text) if classify(s) != 'noop']
-            results = [mw.execute(s, parameters={k: v for k, v in params.items() if '$' + k in s} or None).to_dict()
-                       for s in statements]
+            results = []
+            for s in statements:
+                used = {k: v for k, v in params.items() if '$' + k in s} or None
+                r = mw.execute(s, parameters=used).to_dict()
+                if r.get('rewritten') and r.get('cypher'):
+                    r['compile_error'] = compile_error(mw, r['cypher'], used)
+                results.append(r)
             queries = [r for r in results if r.get('kind') == 'query'] or results
             main = queries[-1]
+            errors = [r['compile_error'] for r in queries if r.get('compile_error')]
             row.update(rewritten=any(r.get('rewritten') for r in queries),
+                       compile_errors=errors,
                        reason='rewritten' if any(r.get('rewritten') for r in queries) else main.get('reason'),
                        indexes=sorted({i for r in queries if r.get('rewritten') for i in r.get('indexes') or []}),
                        detail=' | '.join((r.get('detail') or '')[:400] for r in queries if r.get('detail')),
@@ -219,15 +244,22 @@ def summarize(report):
                 lines.append(f'   [index fail] {e["file"]:26} {e["reason"]}: {e["detail"][:160]}')
         lines.append(f'   {dict(collections.Counter(q.get("reason") for q in res["queries"]))}')
         for q in res['queries']:
-            mark = 'OK ' if q.get('rewritten') else '-- '
+            mark = ('!! ' if q.get('compile_errors') else 'OK ') if q.get('rewritten') else '-- '
             own = ','.join(q['index_dirs']) or '(no index dir)'
             lines.append(f'   {mark}{q["query"]:42} {q.get("reason", ""):22} own={own:22} '
                          f'{",".join(q.get("indexes") or [])[:90]}')
+            for error in q.get('compile_errors') or []:
+                lines.append(f'      output does not compile: {error[:200]}')
         if ok - used:
             lines.append('   indexes not read: ' + ', '.join(sorted(ok - used)))
-        total.update(fill=len(fills), fill_ok=len(ok), used=len(ok & used), reads=len(reads), done=len(done))
+        bad = [q for q in done if q.get('compile_errors')]
+        if bad:
+            lines.append(f'   rewritten outputs that do not compile: {len(bad)}')
+        total.update(fill=len(fills), fill_ok=len(ok), used=len(ok & used), reads=len(reads), done=len(done),
+                     bad=len(bad))
     lines.append(f'TOTAL: FILL registered {total["fill_ok"]}/{total["fill"]}; indexes read {total["used"]}/'
-                 f'{total["fill_ok"]}; queries rewritten {total["done"]}/{total["reads"]} (read-only)')
+                 f'{total["fill_ok"]}; queries rewritten {total["done"]}/{total["reads"]} (read-only), '
+                 f'of which {total["bad"]} do not compile')
     return '\n'.join(lines)
 
 

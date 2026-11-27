@@ -5,6 +5,10 @@ class NeugDialect(Dialect):
     """NeuG Cypher: `(n:A:B)` is a label UNION, as in the binder."""
     name = 'neug'
 
+    def coalesce(self, expression, default):
+        # NeuG's function catalog has no COALESCE.
+        return f'CASE WHEN {expression} IS NULL THEN {default} ELSE {expression} END'
+
 
 class KuzuDialect(Dialect):
     """Kuzu shares NeuG's grammar family (NeuG's compiler derives from Kuzu):

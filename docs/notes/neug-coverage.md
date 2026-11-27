@@ -82,11 +82,21 @@ input 中没有改写的 15 条：
 两组都没读到的 25 个索引：bi14 系列 ×8、bi15/bi15u/bi15w ×5、bi19 ×2、bi20 ×2、BI4_MESSAGE_COUNT、PERSON(likeCount)；
 q2 ×2；tcr9TransferIn（与 tcr6TransferIn 定义相同，tcr-9 读的是后者）、tsr2TransferIn（tsr-2 只读到了出边那一组）、tcr10 ×2。
 
-## NeuG rewrite（`NeuG/queries/rewrite`）
+## NeuG rewrite（`NeuG/queries/rewrite`，2026-11-26 重建）
 
-`NeuG/queries/rewrite/` 是从 optimized 中挑出的两类查询，按原相对路径复制，optimized 本身不动：
-与 baseline 文本相同的 25 条，以及不读物化结果的其他图模式写法 29 条。筛选规则和清单见该目录的 README，分类脚本为
-`cico_work/tools/classify_opt.py`。Kuzu、Neo4j 的 optimized 全部手写读取物化结果，没有符合条件的查询。
+目标（用户 2026-11-26）：只看**原查询的自动隐式改写**，手写读物化列的 optimized 版本不管；允许把原查询改成语义等价、
+能对上匹配逻辑的形式。`NeuG/queries/rewrite/` 因此改为：baseline 中所有有可用索引的只读查询，能直接改写的原样复制
+（47 条），匹配不上的写成等价形式（13 条：bi4、bi6、bi12、bi14a、ic14、q2、q6、q7、tcr-9、tcr-10、tcr-11、tsr-2、tsr-3），
+每个改动文件的开头注释写明等价理由和依赖的约束。清单见该目录的 README；旧版本（从 optimized 中挑出的 54 条）
+备份在 `cico_work/retired_neug_rewrite_20261126/`。
 
-`tests/neug_coverage.py --query-set rewrite`（结果 `cico_work/cov_neug_rewrite_a.*`）：**49/54** 改写成功，读到 54/85 个索引。
-未改写的 5 条中，ic12、q3、q9 没有索引；有索引而没有匹配上的只有 bi14a 和 q2。
+`tests/neug_coverage.py --query-set rewrite`（结果 `cico_work/cov_neug_rw_b2.*`）：**60/60 改写成功**，读到 70/85 个索引。
+未读到的 15 个：bi14 case 2/4 ×4（与 case 1/3 同构，读其反向列）、tcr9TransferIn（与 tcr6TransferIn 定义相同）、
+PERSON(likeCount)（bi6 读消息级 likeCount）、bi15/bi19/bi20 的权重与方向计数 ×9（只有 WSHORTEST 主查询会用，NeuG
+baseline 自己物化权重，不在集合内）。
+
+编译检查：覆盖率脚本现在把每条改写输出再用 NeuG 编译器对带索引的 catalog 编译一次（`engine.bind(..., catalog=indexed)`）。
+发现 `edge_carriers.py` 在 neug 方言下输出 `coalesce(...)`，NeuG 的函数目录里没有（"function COALESCE does not exist"），
+bi14a 的改写输出因此无法编译。修复：`Dialect.coalesce` 钩子，基类仍输出 `coalesce`（Kuzu 输出不变），`NeugDialect` 输出
+`CASE WHEN x IS NULL THEN d ELSE x END`；新增单测 `tests/test_edge_carriers.py::NeugEdgeCarrierTests`。修复后 60 条输出
+全部可编译；单测 191/191（5 跳过）。

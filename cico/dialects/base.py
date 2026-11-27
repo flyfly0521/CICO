@@ -143,10 +143,15 @@ class Dialect:
         rows, all with the same truth value (any a->b edge carries the same
         existence bit), and the rule's WITH DISTINCT removes them."""
         k1, k2 = self.ident(fresh('cico_k')), self.ident(fresh('cico_k'))
-        read = lambda k, column: f'coalesce({k}.{self.ident(column)}, 0) > 0' if column else fallback  # noqa: E731
+        read = lambda k, column: (f'{self.coalesce(f"{k}.{self.ident(column)}", "0")} > 0'  # noqa: E731
+                                  if column else fallback)
         return (f'OPTIONAL MATCH ({a})-[{k1}{rel}]->({b}) OPTIONAL MATCH ({b})-[{k2}{rel}]->({a})',
                 f'CASE WHEN {k1} IS NOT NULL THEN {read(k1, column_ab)} '
                 f'WHEN {k2} IS NOT NULL THEN {read(k2, column_ba)} ELSE {fallback} END')
+
+    def coalesce(self, expression, default):
+        """`expression`, or `default` when it is NULL (printed text)."""
+        return f'coalesce({expression}, {default})'
 
     def property(self, owner, prop, uid=None):
         return f'{self.ident(owner)}.{self.ident(prop)}'

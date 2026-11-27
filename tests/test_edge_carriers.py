@@ -68,5 +68,29 @@ class EdgeCarrierTests(unittest.TestCase):
                 self.assertNotIn('cico_k', r.cypher, name)
 
 
+class NeugEdgeCarrierTests(unittest.TestCase):
+    """Dialect neug: the rule's text must compile with the NeuG compiler
+    (no coalesce() in NeuG's function catalog)."""
+
+    def setUp(self):
+        self.mw = IndexMiddleware(ROOT / 'schemas/ldbc-bi.yaml', dialect='neug')
+        self.addCleanup(self.mw.close)
+        for column in ('c1_fwd', 'c1_rev'):
+            self.mw.execute(f'ALTER TABLE KNOWS ADD IF NOT EXISTS {column} INT64 DEFAULT 0')
+        self.mw.register_index([CASE1])
+        self.mw.register_index([CASE1_REV])
+
+    def test_existence_output_compiles(self):
+        query = ('MATCH (p1:PERSON {id: $a})-[:KNOWS]-(p2:PERSON) WITH p1, p2, 0 AS score '
+                 'OPTIONAL MATCH (p1)<-[:HASCREATOR]-(c:COMMENT)-[:REPLYOF]->(:COMMENT:POST)-[:HASCREATOR]->(p2) '
+                 'WITH DISTINCT p1, p2, score + (CASE WHEN c IS NULL THEN 0 ELSE 4 END) AS score '
+                 'RETURN p1.id, p2.id, score')
+        r = self.mw.execute(query, parameters={'a': 1})
+        self.assertTrue(r.rewritten, r.to_dict())
+        self.assertNotIn('coalesce', r.cypher.lower())
+        self.assertIn('CASE WHEN cico_k.c1_fwd IS NULL THEN 0 ELSE cico_k.c1_fwd END > 0', r.cypher)
+        self.mw.engine.bind(r.cypher, {'a': 'INT64'}, catalog='indexed')
+
+
 if __name__ == '__main__':
     unittest.main()
